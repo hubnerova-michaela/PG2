@@ -1,7 +1,9 @@
 {
-  "appname": "first_test",
+  "appname": "OpenGL Application",
   "default_resolution": {
     "x": 1024,
     "y": 768
-  }
+  },
+  "vsync_enabled": true,
+  "debug_mode": true
 }
