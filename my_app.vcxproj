@@ -146,7 +146,7 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
-    <ClCompile Include="..\..\..\Downloads\02 library demonstration\testvcpackage.cpp" />
+    <ClCompile Include="my_app.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="..\..\..\Downloads\02 library demonstration\app_settings.json" />
