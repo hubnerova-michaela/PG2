@@ -149,7 +149,7 @@
     <ClCompile Include="my_app.cpp" />
   </ItemGroup>
   <ItemGroup>
-    <None Include="..\..\..\Downloads\02 library demonstration\app_settings.json" />
+    <None Include="app_settings.json" />
     <None Include="vcpkg.json" />
   </ItemGroup>
   <ItemGroup>
