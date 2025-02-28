@@ -8,19 +8,39 @@
 #include <string>
 #include <chrono>
 #include <stdexcept>
+#include <vector>
 #include <opencv2/opencv.hpp>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
+#include <glm/gtc/type_ptr.hpp>
 #include <nlohmann/json.hpp>
+
+// Vertex structure definition
+struct vertex {
+    glm::vec3 position;
+};
 
 // Global variables
 bool g_vSync = true;
 std::string g_windowTitle = "Graphics Application";
 int g_windowWidth = 800;
 int g_windowHeight = 600;
+
+// GL objects and shader program
+GLuint shader_prog_ID = 0;
+GLuint VBO_ID = 0;
+GLuint VAO_ID = 0;
+GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+
+// Triangle vertices
+std::vector<vertex> triangle_vertices = {
+    {{0.0f,  0.5f,  0.0f}},
+    {{0.5f, -0.5f,  0.0f}},
+    {{-0.5f, -0.5f,  0.0f}}
+};
 
 // Callback functions
 void error_callback(int error, const char* description) {
@@ -38,6 +58,28 @@ void key_callback(GLFWwindow* window, int key, int scancode, int action, int mod
         glfwSwapInterval(g_vSync ? 1 : 0);
         std::cout << "VSync: " << (g_vSync ? "ON" : "OFF") << std::endl;
     }
+
+    // Change triangle color with different keys
+    if (action == GLFW_PRESS || action == GLFW_REPEAT) {
+        switch (key) {
+        case GLFW_KEY_R:
+            r = (r > 0.5f) ? 0.0f : 1.0f;
+            std::cout << "Red: " << r << std::endl;
+            break;
+        case GLFW_KEY_G:
+            g = (g > 0.5f) ? 0.0f : 1.0f;
+            std::cout << "Green: " << g << std::endl;
+            break;
+        case GLFW_KEY_B:
+            b = (b > 0.5f) ? 0.0f : 1.0f;
+            std::cout << "Blue: " << b << std::endl;
+            break;
+        case GLFW_KEY_A:
+            a = (a > 0.5f) ? 0.5f : 1.0f;
+            std::cout << "Alpha: " << a << std::endl;
+            break;
+        }
+    }
 }
 
 void fbsize_callback(GLFWwindow* window, int width, int height) {
@@ -49,7 +91,11 @@ void fbsize_callback(GLFWwindow* window, int width, int height) {
 
 void mouse_button_callback(GLFWwindow* window, int button, int action, int mods) {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS) {
-        std::cout << "Left mouse button pressed" << std::endl;
+        // Change color on left click
+        r = static_cast<float>(rand()) / RAND_MAX;
+        g = static_cast<float>(rand()) / RAND_MAX;
+        b = static_cast<float>(rand()) / RAND_MAX;
+        std::cout << "Random color: R=" << r << " G=" << g << " B=" << b << std::endl;
     }
 }
 
@@ -59,7 +105,11 @@ void cursor_position_callback(GLFWwindow* window, double xpos, double ypos) {
 }
 
 void scroll_callback(GLFWwindow* window, double xoffset, double yoffset) {
-    std::cout << "Scroll: " << yoffset << std::endl;
+    // Adjust alpha with scroll
+    a += static_cast<float>(yoffset) * 0.1f;
+    if (a < 0.0f) a = 0.0f;
+    if (a > 1.0f) a = 1.0f;
+    std::cout << "Alpha adjusted to: " << a << std::endl;
 }
 
 // Debug output callback
@@ -116,6 +166,92 @@ void checkGLError(const std::string& location) {
         }
         std::cerr << "OpenGL Error at " << location << ": " << errorString << " (" << error << ")" << std::endl;
     }
+}
+
+// Function to initialize assets and shaders
+void init_assets() {
+    //
+    // Initialize pipeline: compile, link and use shaders
+    //
+
+    // SHADERS - define & compile & link
+    const char* vertex_shader =
+        "#version 460 core\n"
+        "in vec3 attribute_Position;"
+        "void main() {"
+        "  gl_Position = vec4(attribute_Position, 1.0);"
+        "}";
+
+    const char* fragment_shader =
+        "#version 460 core\n"
+        "uniform vec4 uniform_Color;"
+        "out vec4 FragColor;"
+        "void main() {"
+        "  FragColor = uniform_Color;"
+        "}";
+
+    GLuint vs = glCreateShader(GL_VERTEX_SHADER);
+    glShaderSource(vs, 1, &vertex_shader, NULL);
+    glCompileShader(vs);
+
+    // Check for compilation errors
+    GLint success;
+    GLchar infoLog[512];
+    glGetShaderiv(vs, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(vs, 512, NULL, infoLog);
+        std::cerr << "Vertex shader compilation failed: " << infoLog << std::endl;
+    }
+
+    GLuint fs = glCreateShader(GL_FRAGMENT_SHADER);
+    glShaderSource(fs, 1, &fragment_shader, NULL);
+    glCompileShader(fs);
+
+    // Check for compilation errors
+    glGetShaderiv(fs, GL_COMPILE_STATUS, &success);
+    if (!success) {
+        glGetShaderInfoLog(fs, 512, NULL, infoLog);
+        std::cerr << "Fragment shader compilation failed: " << infoLog << std::endl;
+    }
+
+    shader_prog_ID = glCreateProgram();
+    glAttachShader(shader_prog_ID, fs);
+    glAttachShader(shader_prog_ID, vs);
+    glLinkProgram(shader_prog_ID);
+
+    // Check for linking errors
+    glGetProgramiv(shader_prog_ID, GL_LINK_STATUS, &success);
+    if (!success) {
+        glGetProgramInfoLog(shader_prog_ID, 512, NULL, infoLog);
+        std::cerr << "Shader program linking failed: " << infoLog << std::endl;
+    }
+
+    // Now we can delete shader parts
+    glDetachShader(shader_prog_ID, fs);
+    glDetachShader(shader_prog_ID, vs);
+    glDeleteShader(vs);
+    glDeleteShader(fs);
+
+    // 
+    // Create and load data into GPU
+    //
+
+    // Create VAO
+    glGenVertexArrays(1, &VAO_ID);
+    glBindVertexArray(VAO_ID);
+
+    // Create and fill VBO
+    glGenBuffers(1, &VBO_ID);
+    glBindBuffer(GL_ARRAY_BUFFER, VBO_ID);
+    glBufferData(GL_ARRAY_BUFFER, triangle_vertices.size() * sizeof(vertex), triangle_vertices.data(), GL_STATIC_DRAW);
+
+    // Set up vertex attributes
+    GLint position_attrib_location = glGetAttribLocation(shader_prog_ID, "attribute_Position");
+    glEnableVertexAttribArray(position_attrib_location);
+    glVertexAttribPointer(position_attrib_location, 3, GL_FLOAT, GL_FALSE, sizeof(vertex), (void*)offsetof(vertex, position));
+
+    // Unbind VAO to prevent accidental modifications
+    glBindVertexArray(0);
 }
 
 // Function to load settings from JSON
@@ -242,6 +378,9 @@ int main() {
         glfwSetCursorPosCallback(window, cursor_position_callback);
         glfwSetScrollCallback(window, scroll_callback);
 
+        // Initialize OpenGL assets
+        init_assets();
+
         // OpenCV test (just to verify it works)
         cv::Mat image = cv::imread("resources/lightbulb.jpg");
         if (!image.empty()) {
@@ -251,10 +390,29 @@ int main() {
             std::cerr << "Failed to load image." << std::endl;
         }
 
+        // Enable alpha blending
+        glEnable(GL_BLEND);
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
         // Variables for FPS calculation
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
         float fps = 0.0f;
+
+        // Get uniform location for color
+        glUseProgram(shader_prog_ID);
+        GLint uniform_color_location = glGetUniformLocation(shader_prog_ID, "uniform_Color");
+        if (uniform_color_location == -1) {
+            std::cerr << "Uniform location is not found in active shader program." << std::endl;
+        }
+
+        // Print controls info
+        std::cout << "\nControls:\n";
+        std::cout << "R, G, B keys - Toggle red, green, blue components\n";
+        std::cout << "Left mouse click - Set random color\n";
+        std::cout << "Mouse wheel - Adjust alpha/transparency\n";
+        std::cout << "F12 - Toggle VSync\n";
+        std::cout << "ESC - Exit\n\n";
 
         // Main rendering loop
         while (!glfwWindowShouldClose(window)) {
@@ -279,7 +437,12 @@ int main() {
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
 
-            // Here you would add your rendering code
+            // Render triangle
+            glUseProgram(shader_prog_ID);
+            glUniform4f(uniform_color_location, r, g, b, a);
+            glBindVertexArray(VAO_ID);
+            glDrawArrays(GL_TRIANGLES, 0, triangle_vertices.size());
+            glBindVertexArray(0);
 
             // Check for errors
             checkGLError("Main Loop");
@@ -290,6 +453,11 @@ int main() {
             // Poll for and process events
             glfwPollEvents();
         }
+
+        // Clean up GL resources
+        glDeleteProgram(shader_prog_ID);
+        glDeleteBuffers(1, &VBO_ID);
+        glDeleteVertexArrays(1, &VAO_ID);
 
         // Clean up
         glfwDestroyWindow(window);
