@@ -112,7 +112,8 @@ public:
 
     // Delete copy constructor and copy assignment
     Mesh(const Mesh &) = delete;
-    Mesh &operator=(const Mesh &) = delete;    void draw(glm::vec3 const &offset, glm::vec3 const &rotation)
+    Mesh &operator=(const Mesh &) = delete;
+    void draw(glm::vec3 const &offset, glm::vec3 const &rotation)
     {
         if (VAO == 0)
         {

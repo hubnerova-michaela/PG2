@@ -17,13 +17,13 @@ class Model
 public:
     std::vector<Mesh> meshes;
     std::string name;
-    
+
     // original position
     glm::vec3 origin{};
-    glm::vec3 orientation{};  //rotation by x,y,z axis, in radians
+    glm::vec3 orientation{};            // rotation by x,y,z axis, in radians
     glm::vec3 scale{1.0f, 1.0f, 1.0f};  // default scale to 1.0
-    glm::mat4 local_model_matrix{1.0f}; //for complex transformations (identity matrix)
-    
+    glm::mat4 local_model_matrix{1.0f}; // for complex transformations (identity matrix)
+
     ShaderProgram &shader;
 
     // Constructor
@@ -104,7 +104,8 @@ public:
     void update(const float delta_t)
     {
         // origin += glm::vec3(3,0,0) * delta_t; // s = s0 + v*dt
-    }    void draw(glm::vec3 const &offset = glm::vec3(0.0), 
+    }
+    void draw(glm::vec3 const &offset = glm::vec3(0.0),
               glm::vec3 const &rotation = glm::vec3(0.0f),
               glm::vec3 const &scale_change = glm::vec3(1.0f))
     {
@@ -122,14 +123,14 @@ public:
         glm::mat4 m_s = glm::scale(glm::mat4(1.0f), scale_change);
 
         glm::mat4 model_matrix = local_model_matrix * s * rz * ry * rx * t * m_s * m_rz * m_ry * m_rx * m_off;
-         
+
         // call draw() on mesh (all meshes)
         for (auto &mesh : meshes)
         {
             mesh.draw(model_matrix);
         }
     }
-    
+
     void draw(glm::mat4 const &model_matrix)
     {
         for (auto &mesh : meshes)

@@ -53,7 +53,7 @@ float fov = 60.0f; // Field of view in degrees
 std::unique_ptr<Camera> camera;
 bool firstMouse = true;
 double lastX = 400, lastY = 300; // Initial mouse position (center of 800x600 window)
-bool cameraEnabled = false; // Toggle camera control mode
+bool cameraEnabled = false;      // Toggle camera control mode
 
 // Triangle vertices
 std::vector<vertex> triangle_vertices = {
@@ -80,7 +80,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         g_vSync = !g_vSync;
         glfwSwapInterval(g_vSync ? 1 : 0);
         std::cout << "VSync: " << (g_vSync ? "ON" : "OFF") << std::endl;
-    }    // Toggle animation with SPACE
+    } // Toggle animation with SPACE
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
     {
         g_animationEnabled = !g_animationEnabled;
@@ -101,7 +101,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         {
             // Release cursor
             glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        }        std::cout << "Camera control: " << (cameraEnabled ? "ON (WASD + mouse)" : "OFF") << std::endl;
+        }
+        std::cout << "Camera control: " << (cameraEnabled ? "ON (WASD + mouse)" : "OFF") << std::endl;
     }
 
     // Reset camera speed with V key
@@ -123,11 +124,12 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         case GLFW_KEY_G:
             g = (g > 0.5f) ? 0.0f : 1.0f;
             std::cout << "Green: " << g << std::endl;
-            break;        case GLFW_KEY_B:
+            break;
+        case GLFW_KEY_B:
             b = (b > 0.5f) ? 0.0f : 1.0f;
             std::cout << "Blue: " << b << std::endl;
             break;
-        case GLFW_KEY_T:  // Changed from A to T for Transparency
+        case GLFW_KEY_T: // Changed from A to T for Transparency
             a = (a > 0.5f) ? 0.5f : 1.0f;
             std::cout << "Alpha: " << a << std::endl;
             break;
@@ -139,28 +141,30 @@ void fbsize_callback(GLFWwindow *window, int width, int height)
 {
     g_windowWidth = width;
     g_windowHeight = height;
-    
+
     // Set viewport
     glViewport(0, 0, width, height);
-    
+
     // Update projection matrix
-    if (height <= 0) height = 1; // avoid division by 0
+    if (height <= 0)
+        height = 1; // avoid division by 0
     float ratio = static_cast<float>(width) / height;
-    
+
     projectionMatrix = glm::perspective(
-        glm::radians(fov),  // Field of view
-        ratio,              // Aspect ratio
+        glm::radians(fov), // Field of view
+        ratio,             // Aspect ratio
         0.1f,              // Near clipping plane
         20000.0f           // Far clipping plane
     );
-    
+
     // Set projection matrix uniform if shader is active
-    if (my_shader) {
+    if (my_shader)
+    {
         my_shader->activate();
         my_shader->setUniform("uProj_m", projectionMatrix);
         my_shader->deactivate();
     }
-    
+
     std::cout << "Window resized to: " << width << "x" << height << std::endl;
 }
 
@@ -350,28 +354,29 @@ void init_assets()
     scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
     scene["quad"] = std::make_unique<Model>("resources/objects/quad.obj", *my_shader);
     scene["simple"] = std::make_unique<Model>("resources/objects/simple_triangle.obj", *my_shader);
-    
+
     // Set up projection matrix
-    if (g_windowHeight <= 0) g_windowHeight = 1; // avoid division by 0
+    if (g_windowHeight <= 0)
+        g_windowHeight = 1; // avoid division by 0
     float ratio = static_cast<float>(g_windowWidth) / g_windowHeight;
-    
+
     projectionMatrix = glm::perspective(
-        glm::radians(fov),  // Field of view
-        ratio,              // Aspect ratio
+        glm::radians(fov), // Field of view
+        ratio,             // Aspect ratio
         0.1f,              // Near clipping plane
         20000.0f           // Far clipping plane
-    );    // Set up view matrix - position camera to better see the scene
+    );                     // Set up view matrix - position camera to better see the scene
     viewMatrix = glm::lookAt(
-        glm::vec3(0.0f, 2.0f, 5.0f),   // Camera position (eye)
-        glm::vec3(0.0f, 0.0f, -2.0f),   // Look at point (center)
-        glm::vec3(0.0f, 1.0f, 0.0f)    // Up vector
+        glm::vec3(0.0f, 2.0f, 5.0f),  // Camera position (eye)
+        glm::vec3(0.0f, 0.0f, -2.0f), // Look at point (center)
+        glm::vec3(0.0f, 1.0f, 0.0f)   // Up vector
     );
-    
+
     // Initialize camera at the same position as the static view
     camera = std::make_unique<Camera>(glm::vec3(0.0f, 2.0f, 5.0f));
     camera->MovementSpeed = 2.5f;
     camera->MouseSensitivity = 0.1f;
-    
+
     // Set initial uniforms
     my_shader->activate();
     my_shader->setUniform("uProj_m", projectionMatrix);
@@ -517,7 +522,8 @@ int main()
         glfwSetKeyCallback(window, key_callback);
         glfwSetFramebufferSizeCallback(window, fbsize_callback);
         glfwSetMouseButtonCallback(window, mouse_button_callback);
-        glfwSetCursorPosCallback(window, cursor_position_callback);        glfwSetScrollCallback(window, scroll_callback); // Initialize OpenGL assets
+        glfwSetCursorPosCallback(window, cursor_position_callback);
+        glfwSetScrollCallback(window, scroll_callback); // Initialize OpenGL assets
         init_assets();
 
         // Enable depth testing
@@ -525,10 +531,10 @@ int main()
 
         // Enable alpha blending
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);// Variables for FPS calculation
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Variables for FPS calculation
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
-        float fps = 0.0f;        // Print controls info
+        float fps = 0.0f; // Print controls info
         std::cout << "\nControls:\n";
         std::cout << "R, G, B keys - Toggle red, green, blue components\n";
         std::cout << "T key - Toggle alpha/transparency\n";
@@ -538,17 +544,17 @@ int main()
         std::cout << "Mouse wheel - Adjust alpha/transparency (or camera speed when camera mode is on)\n";
         std::cout << "F12 - Toggle VSync\n";
         std::cout << "ESC - Exit\n\n";
-          std::cout << "Camera Controls (when enabled with C key):\n";
+        std::cout << "Camera Controls (when enabled with C key):\n";
         std::cout << "WASD - Move forward/back/left/right\n";
         std::cout << "Q/E - Move down/up\n";
         std::cout << "Mouse - Look around (cursor will be captured)\n";
         std::cout << "Mouse wheel - Adjust movement speed\n";
         std::cout << "V - Reset camera speed to default\n\n";
-        
+
         std::cout << "Transformation Demo:\n";
         std::cout << "- Left object: Simple Y-axis rotation\n";
         std::cout << "- Center object: Translation (up/down) + Scaling\n";
-        std::cout << "- Right object: Multi-axis rotation\n\n";// Variables for time-based animation
+        std::cout << "- Right object: Multi-axis rotation\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -559,7 +565,7 @@ int main()
             frameCount++;
 
             // Calculate elapsed time for animations
-            float elapsedTime = std::chrono::duration<float>(currentTime - startTime).count();            // Update FPS once per second
+            float elapsedTime = std::chrono::duration<float>(currentTime - startTime).count(); // Update FPS once per second
             float timeDelta = std::chrono::duration<float>(currentTime - lastTime).count();
             if (timeDelta >= 1.0f)
             {
@@ -571,7 +577,7 @@ int main()
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
                                     " | VSync: " + (g_vSync ? "ON" : "OFF");
                 glfwSetWindowTitle(window, title.c_str());
-            }            // Process camera input and update view matrix
+            } // Process camera input and update view matrix
             if (cameraEnabled && camera)
             {
                 // Calculate delta time for smooth camera movement
@@ -586,7 +592,7 @@ int main()
                     static int debugCounter = 0;
                     if (++debugCounter % 60 == 0) // Print debug info once per second at 60fps
                     {
-                        std::cout << "Camera - Speed: " << camera->MovementSpeed 
+                        std::cout << "Camera - Speed: " << camera->MovementSpeed
                                   << ", Movement: (" << movement.x << ", " << movement.y << ", " << movement.z << ")"
                                   << ", DeltaTime: " << deltaTime << std::endl;
                     }
@@ -599,25 +605,25 @@ int main()
 
             // Clear the screen
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);            // Render models with controlled transformations to demonstrate each type
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Render models with controlled transformations to demonstrate each type
             my_shader->activate();
             my_shader->setUniform("uniform_Color", glm::vec4(r, g, b, a));
-            
+
             // Set view matrix (updated each frame for camera movement)
-            my_shader->setUniform("uV_m", viewMatrix);            // Triangle: Very subtle rotation around Y-axis (left object)
+            my_shader->setUniform("uV_m", viewMatrix); // Triangle: Very subtle rotation around Y-axis (left object)
             if (scene.find("triangle") != scene.end())
             {
                 glm::vec3 position(-1.5f, 0.0f, -3.0f);
                 glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 8.0f : 0.0f, 0.0f); // Very slow Y rotation
-                glm::vec3 scale(1.0f); // No scaling
+                glm::vec3 scale(1.0f);                                                          // No scaling
                 scene.at("triangle")->draw(position, rotation, scale);
             }
 
             // Quad: Subtle translation up/down (center object)
             if (scene.find("quad") != scene.end())
             {
-                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f); 
-                glm::vec3 rotation(0.0f); // No rotation
+                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
+                glm::vec3 rotation(0.0f);                                                            // No rotation
                 glm::vec3 scale(g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f); // Very subtle scale
                 scene.at("quad")->draw(position, rotation, scale);
             }
@@ -626,8 +632,8 @@ int main()
             if (scene.find("simple") != scene.end())
             {
                 glm::vec3 position(1.5f, 0.0f, -3.0f);
-                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f, 
-                                 g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f); 
+                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f,
+                                   g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
                 glm::vec3 scale(0.8f); // Smaller scale
                 scene.at("simple")->draw(position, rotation, scale);
             }

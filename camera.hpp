@@ -9,23 +9,23 @@
 class Camera
 {
 public:
-
     // Camera Attributes
     glm::vec3 Position;
     glm::vec3 Front;
-    glm::vec3 Right; 
+    glm::vec3 Right;
     glm::vec3 Up; // camera local UP vector
 
     GLfloat Yaw = -90.0f;
-    GLfloat Pitch =  0.0f;;
+    GLfloat Pitch = 0.0f;
+    ;
     GLfloat Roll = 0.0f;
-      // Camera options
+    // Camera options
     GLfloat MovementSpeed = 1.0f;
     GLfloat MouseSensitivity = 0.25f;
 
-    Camera(glm::vec3 position):Position(position)
+    Camera(glm::vec3 position) : Position(position)
     {
-        this->Up = glm::vec3(0.0f,1.0f,0.0f);
+        this->Up = glm::vec3(0.0f, 1.0f, 0.0f);
         // initialization of the camera reference system
         this->updateCameraVectors();
     }
@@ -35,28 +35,28 @@ public:
         return glm::lookAt(this->Position, this->Position + this->Front, this->Up);
     }
 
-    glm::vec3 ProcessInput(GLFWwindow* window, GLfloat deltaTime)
+    glm::vec3 ProcessInput(GLFWwindow *window, GLfloat deltaTime)
     {
         glm::vec3 direction{0};
-          
-        if (glfwGetKey(window,GLFW_KEY_W) == GLFW_PRESS)
+
+        if (glfwGetKey(window, GLFW_KEY_W) == GLFW_PRESS)
             direction += Front;
 
-        if (glfwGetKey(window,GLFW_KEY_S) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_S) == GLFW_PRESS)
             direction += -Front;
 
-        if (glfwGetKey(window,GLFW_KEY_A) == GLFW_PRESS)
-            direction += -Right;       // add unit vector to final direction  
+        if (glfwGetKey(window, GLFW_KEY_A) == GLFW_PRESS)
+            direction += -Right; // add unit vector to final direction
 
-        if (glfwGetKey(window,GLFW_KEY_D) == GLFW_PRESS)
+        if (glfwGetKey(window, GLFW_KEY_D) == GLFW_PRESS)
             direction += Right;
 
-        if (glfwGetKey(window,GLFW_KEY_Q) == GLFW_PRESS)
-            direction += -Up;       // move down
+        if (glfwGetKey(window, GLFW_KEY_Q) == GLFW_PRESS)
+            direction += -Up; // move down
 
-        if (glfwGetKey(window,GLFW_KEY_E) == GLFW_PRESS)
-            direction += Up;        // move up
-            
+        if (glfwGetKey(window, GLFW_KEY_E) == GLFW_PRESS)
+            direction += Up; // move up
+
         if (glm::length(direction) > 0.0f)
             return glm::normalize(direction) * MovementSpeed * deltaTime;
         else
@@ -68,7 +68,7 @@ public:
         xoffset *= this->MouseSensitivity;
         yoffset *= this->MouseSensitivity;
 
-        this->Yaw   += xoffset;
+        this->Yaw += xoffset;
         this->Pitch += yoffset;
 
         if (constraintPitch)
@@ -91,7 +91,7 @@ private:
         front.z = sin(glm::radians(this->Yaw)) * cos(glm::radians(this->Pitch));
 
         this->Front = glm::normalize(front);
-        this->Right = glm::normalize(glm::cross(this->Front, glm::vec3(0.0f,1.0f,0.0f)));
-        this->Up    = glm::normalize(glm::cross(this->Right, this->Front));
+        this->Right = glm::normalize(glm::cross(this->Front, glm::vec3(0.0f, 1.0f, 0.0f)));
+        this->Up = glm::normalize(glm::cross(this->Right, this->Front));
     }
 };
