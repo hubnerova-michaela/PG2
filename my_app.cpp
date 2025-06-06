@@ -14,6 +14,7 @@
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
+#include <glm/gtc/matrix_transform.hpp>
 #define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtc/type_ptr.hpp>
@@ -38,6 +39,14 @@ int g_windowHeight = 600;
 std::unique_ptr<ShaderProgram> my_shader;
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+
+// Animation control
+bool g_animationEnabled = true;
+
+// Transformation matrices
+glm::mat4 projectionMatrix{1.0f};
+glm::mat4 viewMatrix{1.0f};
+float fov = 60.0f; // Field of view in degrees
 
 // Triangle vertices
 std::vector<vertex> triangle_vertices = {
@@ -64,6 +73,13 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         g_vSync = !g_vSync;
         glfwSwapInterval(g_vSync ? 1 : 0);
         std::cout << "VSync: " << (g_vSync ? "ON" : "OFF") << std::endl;
+    }
+
+    // Toggle animation with SPACE
+    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
+    {
+        g_animationEnabled = !g_animationEnabled;
+        std::cout << "Animation: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
     }
 
     // Change triangle color with different keys
@@ -95,7 +111,28 @@ void fbsize_callback(GLFWwindow *window, int width, int height)
 {
     g_windowWidth = width;
     g_windowHeight = height;
+    
+    // Set viewport
     glViewport(0, 0, width, height);
+    
+    // Update projection matrix
+    if (height <= 0) height = 1; // avoid division by 0
+    float ratio = static_cast<float>(width) / height;
+    
+    projectionMatrix = glm::perspective(
+        glm::radians(fov),  // Field of view
+        ratio,              // Aspect ratio
+        0.1f,              // Near clipping plane
+        20000.0f           // Far clipping plane
+    );
+    
+    // Set projection matrix uniform if shader is active
+    if (my_shader) {
+        my_shader->activate();
+        my_shader->setUniform("uProj_m", projectionMatrix);
+        my_shader->deactivate();
+    }
+    
     std::cout << "Window resized to: " << width << "x" << height << std::endl;
 }
 
@@ -254,6 +291,29 @@ void init_assets()
     scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
     scene["quad"] = std::make_unique<Model>("resources/objects/quad.obj", *my_shader);
     scene["simple"] = std::make_unique<Model>("resources/objects/simple_triangle.obj", *my_shader);
+    
+    // Set up projection matrix
+    if (g_windowHeight <= 0) g_windowHeight = 1; // avoid division by 0
+    float ratio = static_cast<float>(g_windowWidth) / g_windowHeight;
+    
+    projectionMatrix = glm::perspective(
+        glm::radians(fov),  // Field of view
+        ratio,              // Aspect ratio
+        0.1f,              // Near clipping plane
+        20000.0f           // Far clipping plane
+    );
+      // Set up view matrix - position camera to better see the scene
+    viewMatrix = glm::lookAt(
+        glm::vec3(0.0f, 2.0f, 5.0f),   // Camera position (eye)
+        glm::vec3(0.0f, 0.0f, -2.0f),   // Look at point (center)
+        glm::vec3(0.0f, 1.0f, 0.0f)    // Up vector
+    );
+    
+    // Set initial uniforms
+    my_shader->activate();
+    my_shader->setUniform("uProj_m", projectionMatrix);
+    my_shader->setUniform("uV_m", viewMatrix);
+    my_shader->deactivate();
 }
 
 // Function to load settings from JSON
@@ -394,31 +454,41 @@ int main()
         glfwSetKeyCallback(window, key_callback);
         glfwSetFramebufferSizeCallback(window, fbsize_callback);
         glfwSetMouseButtonCallback(window, mouse_button_callback);
-        glfwSetCursorPosCallback(window, cursor_position_callback);
-        glfwSetScrollCallback(window, scroll_callback);        // Initialize OpenGL assets
+        glfwSetCursorPosCallback(window, cursor_position_callback);        glfwSetScrollCallback(window, scroll_callback); // Initialize OpenGL assets
         init_assets();
+
+        // Enable depth testing
+        glEnable(GL_DEPTH_TEST);
 
         // Enable alpha blending
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Variables for FPS calculation
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);// Variables for FPS calculation
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
-        float fps = 0.0f;
-
-        // Print controls info
+        float fps = 0.0f;        // Print controls info
         std::cout << "\nControls:\n";
         std::cout << "R, G, B keys - Toggle red, green, blue components\n";
+        std::cout << "SPACE - Toggle animation on/off\n";
         std::cout << "Left mouse click - Set random color\n";
         std::cout << "Mouse wheel - Adjust alpha/transparency\n";
         std::cout << "F12 - Toggle VSync\n";
         std::cout << "ESC - Exit\n\n";
+        
+        std::cout << "Transformation Demo:\n";
+        std::cout << "- Left object: Simple Y-axis rotation\n";
+        std::cout << "- Center object: Translation (up/down) + Scaling\n";
+        std::cout << "- Right object: Multi-axis rotation\n\n";// Variables for time-based animation
+        auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
         while (!glfwWindowShouldClose(window))
         {
-            // Calculate FPS
+            // Calculate FPS and time
             auto currentTime = std::chrono::high_resolution_clock::now();
             frameCount++;
+
+            // Calculate elapsed time for animations
+            float elapsedTime = std::chrono::duration<float>(currentTime - startTime).count();
 
             // Update FPS once per second
             float timeDelta = std::chrono::duration<float>(currentTime - lastTime).count();
@@ -432,21 +502,44 @@ int main()
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
                                     " | VSync: " + (g_vSync ? "ON" : "OFF");
                 glfwSetWindowTitle(window, title.c_str());
-            }            // Clear the screen
+            }
+
+            // Clear the screen
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT);            // Render models - using new ShaderProgram class
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);            // Render models with controlled transformations to demonstrate each type
             my_shader->activate();
             my_shader->setUniform("uniform_Color", glm::vec4(r, g, b, a));
-              // Draw each model in the scene with different positions
-            if (scene.find("triangle") != scene.end()) {
-                scene.at("triangle")->draw(glm::vec3(-0.6f, 0.0f, 0.0f)); // Left
+            
+            // Set view matrix (update each frame for future camera movement)
+            my_shader->setUniform("uV_m", viewMatrix);            // Triangle: Simple rotation around Y-axis (left object)
+            if (scene.find("triangle") != scene.end())
+            {
+                glm::vec3 position(-1.5f, 0.0f, -3.0f);
+                glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 30.0f : 0.0f, 0.0f); // Slow Y rotation
+                glm::vec3 scale(1.0f); // No scaling
+                scene.at("triangle")->draw(position, rotation, scale);
             }
-            if (scene.find("quad") != scene.end()) {
-                scene.at("quad")->draw(glm::vec3(0.0f, 0.0f, 0.0f)); // Center
+
+            // Quad: Translation up/down + scaling (center object)
+            if (scene.find("quad") != scene.end())
+            {
+                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime) * 0.5f : 0.0f, -3.0f); 
+                glm::vec3 rotation(0.0f); // No rotation
+                glm::vec3 scale(g_animationEnabled ? 1.0f + 0.3f * sin(elapsedTime * 2.0f) : 1.0f); // Pulsing scale
+                scene.at("quad")->draw(position, rotation, scale);
             }
-            if (scene.find("simple") != scene.end()) {
-                scene.at("simple")->draw(glm::vec3(0.6f, 0.0f, 0.0f)); // Right
-            }my_shader->deactivate();
+
+            // Simple triangle: Combined rotation on multiple axes (right object)
+            if (scene.find("simple") != scene.end())
+            {
+                glm::vec3 position(1.5f, 0.0f, -3.0f);
+                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 20.0f : 0.0f, 
+                                 g_animationEnabled ? elapsedTime * 40.0f : 0.0f, 0.0f); 
+                glm::vec3 scale(0.8f); // Smaller scale
+                scene.at("simple")->draw(position, rotation, scale);
+            }
+
+            my_shader->deactivate();
 
             // Check for errors
             checkGLError("Main Loop");
