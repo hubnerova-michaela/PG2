@@ -146,7 +146,14 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="assets.hpp" />
+    <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="Model.cpp" />
+    <ClCompile Include="OBJloader.cpp" />
+    <ClCompile Include="OBJloader.hpp" />
+    <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="my_app.cpp" />
+    <ClCompile Include="teapot_vec.hpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app_settings.json" />
@@ -154,6 +161,11 @@
   </ItemGroup>
   <ItemGroup>
     <Image Include="..\..\..\Downloads\02 library demonstration\resources\lightbulb.jpg" />
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="Mesh.hpp" />
+    <ClInclude Include="Model.hpp" />
+    <ClInclude Include="ShaderProgram.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

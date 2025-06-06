@@ -18,14 +18,46 @@
     <ClCompile Include="my_app.cpp">
       <Filter>Source Files</Filter>
     </ClCompile>
+    <ClCompile Include="ShaderProgram.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Mesh.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="Model.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OBJloader.hpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="teapot_vec.hpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="assets.hpp">
+      <Filter>Header Files</Filter>
+    </ClCompile>
+    <ClCompile Include="OBJloader.cpp">
+      <Filter>Source Files</Filter>
+    </ClCompile>
   </ItemGroup>
   <ItemGroup>
     <None Include="vcpkg.json" />
-    <None Include="..\..\..\Downloads\02 library demonstration\app_settings.json" />
+    <None Include="app_settings.json" />
   </ItemGroup>
   <ItemGroup>
     <Image Include="..\..\..\Downloads\02 library demonstration\resources\lightbulb.jpg">
       <Filter>Resource Files</Filter>
     </Image>
+  </ItemGroup>
+  <ItemGroup>
+    <ClInclude Include="ShaderProgram.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Model.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
+    <ClInclude Include="Mesh.hpp">
+      <Filter>Header Files</Filter>
+    </ClInclude>
   </ItemGroup>
 </Project>
