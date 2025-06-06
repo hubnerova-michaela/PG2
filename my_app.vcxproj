@@ -147,6 +147,7 @@
   </ItemDefinitionGroup>
   <ItemGroup>
     <ClCompile Include="assets.hpp" />
+    <ClCompile Include="camera.hpp" />
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="OBJloader.cpp" />
@@ -154,6 +155,7 @@
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="my_app.cpp" />
     <ClCompile Include="teapot_vec.hpp" />
+    <ClCompile Include="transform.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app_settings.json" />
