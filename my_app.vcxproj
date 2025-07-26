@@ -150,6 +150,8 @@
     <ClCompile Include="Mesh.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="OBJloader.cpp" />
+    <ClCompile Include="ParticleSystem.cpp" />
+    <ClCompile Include="PhysicsSystem.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="my_app.cpp" />
     <ClCompile Include="transform.cpp" />
@@ -168,6 +170,8 @@
     <ClInclude Include="Mesh.hpp" />
     <ClInclude Include="Model.hpp" />
     <ClInclude Include="OBJloader.hpp" />
+    <ClInclude Include="ParticleSystem.hpp" />
+    <ClInclude Include="PhysicsSystem.hpp" />
     <ClInclude Include="ShaderProgram.hpp" />
     <ClInclude Include="teapot_vec.hpp" />
   </ItemGroup>

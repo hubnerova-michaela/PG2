@@ -26,6 +26,9 @@
 #include "camera.hpp"
 #include "assets.hpp"
 #include "lighting.hpp"
+#include "ParticleSystem.hpp"
+#include "PhysicsSystem.hpp"
+#include "particles.cpp"
 
 // Vertex structure definition
 struct vertex
@@ -46,7 +49,10 @@ int g_antialiasingLevel = 4;
 
 // GL objects and shader program
 std::unique_ptr<ShaderProgram> my_shader;
+std::unique_ptr<ShaderProgram> particle_shader;
 std::unique_ptr<LightingSystem> lightingSystem;
+std::unique_ptr<ParticleSystem> particleSystem;
+std::unique_ptr<PhysicsSystem> physicsSystem;
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
@@ -85,6 +91,9 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     {
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
+
+    // Delegate particle system keys
+    particles_key_callback(window, key, scancode, action, mods, particleSystem.get(), physicsSystem.get());
 
     // Toggle VSync with F12
     if (key == GLFW_KEY_F12 && action == GLFW_PRESS)
@@ -416,9 +425,36 @@ void init_assets()
     // Notice: code massively simplified - all moved to specific classes    
     // shader: load, compile, link, initialize params - using lighting shaders
     my_shader = std::make_unique<ShaderProgram>("resources/shaders/phong.vert", "resources/shaders/phong.frag");
+    
+    // Initialize particle shader
+    particle_shader = std::make_unique<ShaderProgram>("resources/shaders/particle.vert", "resources/shaders/particle.frag");
 
     // Initialize lighting system
     lightingSystem = std::make_unique<LightingSystem>();
+    
+    // Initialize physics system
+    physicsSystem = std::make_unique<PhysicsSystem>();
+    
+    // Set up world bounds (large enough for our scene)
+    physicsSystem->setWorldBounds(glm::vec3(-100.0f, -5.0f, -100.0f), glm::vec3(100.0f, 100.0f, 100.0f));
+    
+    // Add some collision objects for testing
+    physicsSystem->addCollisionObject(CollisionObject(CollisionType::BOX, glm::vec3(5.0f, 1.0f, -5.0f), glm::vec3(2.0f, 2.0f, 2.0f)));
+    physicsSystem->addCollisionObject(CollisionObject(CollisionType::SPHERE, glm::vec3(-5.0f, 2.0f, -8.0f), glm::vec3(1.5f, 0.0f, 0.0f)));
+    physicsSystem->addCollisionObject(CollisionObject(CollisionType::PLANE, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))); // Ground plane
+    
+    // Set up collision callbacks
+    physicsSystem->setWallHitCallback([](const glm::vec3& hitPoint) {
+        std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+    });
+    
+    physicsSystem->setObjectHitCallback([](const glm::vec3& hitPoint) {
+        std::cout << "Object hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+    });
+    
+    // Initialize particle system
+    particleSystem = std::make_unique<ParticleSystem>(*particle_shader, 1000);
+    particleSystem->setEmitterPosition(glm::vec3(0.0f, 10.0f, -5.0f));
 
     // model: load model files to test enhanced OBJ loader
     scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
@@ -756,12 +792,23 @@ int main()
         std::cout << "F11 - Toggle antialiasing (requires restart)\n";
         std::cout << "F12 - Toggle VSync\n";
         std::cout << "ESC - Exit\n\n";
+        std::cout << "Particle System Controls:\n";
+        std::cout << "P - Toggle point smoothing\n";
+        std::cout << "N - Emit particle burst\n";
+        std::cout << "M - Reset particle system\n";
+        std::cout << "Numpad +/- - Adjust point size\n\n";
         std::cout << "Camera Controls (when enabled with C key):\n";
-        std::cout << "WASD - Move forward/back/left/right\n";
+        std::cout << "WASD - Move forward/back/left/right (with collision detection)\n";
         std::cout << "Q/E - Move down/up\n";
         std::cout << "Mouse - Look around (cursor will be captured)\n";
         std::cout << "Mouse wheel - Adjust movement speed\n";
         std::cout << "V - Reset camera speed to default\n\n";
+
+        std::cout << "Physics Features:\n";
+        std::cout << "- Collision detection with walls and objects\n";
+        std::cout << "- Wall sliding when hitting obstacles\n";
+        std::cout << "- Height map walking simulation\n";
+        std::cout << "- World boundary constraints\n\n";
 
         std::cout << "Transformation Demo:\n";
         std::cout << "- Left object: Simple Y-axis rotation\n";
@@ -777,7 +824,14 @@ int main()
         std::cout << "- Directional light: Animated sun with color changes\n";
         std::cout << "- Point lights: 3 colored lights (red, green, blue) with motion\n";
         std::cout << "- Spot light: Camera-attached headlight (toggle with L key)\n";
-        std::cout << "- Phong lighting model with ambient, diffuse, and specular components\n\n"; // Variables for time-based animation
+        std::cout << "- Phong lighting model with ambient, diffuse, and specular components\n\n";
+        
+        std::cout << "Particle System Demo:\n";
+        std::cout << "- Real-time particle emission and physics simulation\n";
+        std::cout << "- Gravity, ground collision, and bounce effects\n";
+        std::cout << "- Dynamic particle lifecycle with fade-out\n";
+        std::cout << "- Emitter follows camera position\n";
+        std::cout << "- Point-based rendering with size variation\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -809,19 +863,22 @@ int main()
                 float deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
                 lastFrameTime = currentTime;
 
-                // Process camera movement input
-                glm::vec3 movement = camera->ProcessInput(window, deltaTime);
-                if (glm::length(movement) > 0.001f) // Only print if there's significant movement
+                // Process camera movement input with physics
+                glm::vec3 desiredMovement = camera->ProcessInput(window, deltaTime);
+                glm::vec3 actualMovement = physicsSystem->moveCamera(*camera, desiredMovement);
+                
+                if (glm::length(actualMovement) > 0.001f) // Only print if there's significant movement
                 {
                     static int debugCounter = 0;
                     if (++debugCounter % 60 == 0) // Print debug info once per second at 60fps
                     {
                         std::cout << "Camera - Speed: " << camera->MovementSpeed
-                                  << ", Movement: (" << movement.x << ", " << movement.y << ", " << movement.z << ")"
+                                  << ", Desired: (" << desiredMovement.x << ", " << desiredMovement.y << ", " << desiredMovement.z << ")"
+                                  << ", Actual: (" << actualMovement.x << ", " << actualMovement.y << ", " << actualMovement.z << ")"
                                   << ", DeltaTime: " << deltaTime << std::endl;
                     }
                 }
-                camera->Position += movement;
+                camera->Position += actualMovement;
 
                 // Update view matrix from camera
                 viewMatrix = camera->GetViewMatrix();
@@ -958,6 +1015,26 @@ int main()
             }
 
             my_shader->deactivate();
+            
+            // Update and render particle system
+            if (particleSystem && g_animationEnabled) {
+                // Calculate delta time for particle physics
+                static auto lastParticleTime = currentTime;
+                float particleDeltaTime = std::chrono::duration<float>(currentTime - lastParticleTime).count();
+                lastParticleTime = currentTime;
+                
+                // Update particle system
+                particleSystem->update(particleDeltaTime);
+                
+                // Update emitter position to follow camera with some offset
+                if (camera) {
+                    glm::vec3 emitterPos = camera->Position + camera->Front * 3.0f + glm::vec3(0.0f, 2.0f, 0.0f);
+                    particleSystem->setEmitterPosition(emitterPos);
+                }
+                
+                // Render particles
+                particleSystem->draw(viewMatrix, projectionMatrix);
+            }
 
             // Check for errors
             checkGLError("Main Loop");
@@ -971,6 +1048,9 @@ int main()
 
         // Clean up GL resources
         my_shader->clear();
+        if (particle_shader) {
+            particle_shader->clear();
+        }
 
         // Clean up
         glfwDestroyWindow(window);
