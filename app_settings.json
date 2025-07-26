@@ -1,9 +1,13 @@
 {
+  "antialiasing": {
+    "enabled": true,
+    "level": 8
+  },
   "appname": "OpenGL Application",
+  "debug_mode": true,
   "default_resolution": {
     "x": 1024,
     "y": 768
   },
-  "vsync_enabled": true,
-  "debug_mode": true
+  "vsync_enabled": true
 }

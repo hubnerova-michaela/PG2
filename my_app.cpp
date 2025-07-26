@@ -11,6 +11,7 @@
 #include <vector>
 #include <unordered_map>
 #include <memory>
+#include <algorithm>
 #include <GL/glew.h>
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
@@ -23,6 +24,7 @@
 #include "ShaderProgram.hpp"
 #include "Model.hpp"
 #include "camera.hpp"
+#include "assets.hpp"
 
 // Vertex structure definition
 struct vertex
@@ -30,16 +32,24 @@ struct vertex
     glm::vec3 position;
 };
 
+// Forward declarations
+void saveSettings();
+
 // Global variables
 bool g_vSync = true;
 std::string g_windowTitle = "Graphics Application";
 int g_windowWidth = 800;
 int g_windowHeight = 600;
+bool g_antialisingEnabled = false;
+int g_antialiasingLevel = 4;
 
 // GL objects and shader program
 std::unique_ptr<ShaderProgram> my_shader;
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
+
+// Transparent objects management
+std::vector<TransparentObject> transparentObjects;
 
 // Animation control
 bool g_animationEnabled = true;
@@ -80,6 +90,21 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         g_vSync = !g_vSync;
         glfwSwapInterval(g_vSync ? 1 : 0);
         std::cout << "VSync: " << (g_vSync ? "ON" : "OFF") << std::endl;
+        
+        // Save the new setting
+        saveSettings();
+    }
+
+    // Toggle antialiasing with F11
+    if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
+    {
+        g_antialisingEnabled = !g_antialisingEnabled;
+        std::cout << "Antialiasing toggle requested: " << (g_antialisingEnabled ? "ON" : "OFF") << std::endl;
+        std::cout << "Level: " << g_antialiasingLevel << "x" << std::endl;
+        std::cout << "Note: Antialiasing changes require application restart to take effect." << std::endl;
+        
+        // Save the new setting
+        saveSettings();
     } // Toggle animation with SPACE
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
     {
@@ -132,6 +157,29 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         case GLFW_KEY_T: // Changed from A to T for Transparency
             a = (a > 0.5f) ? 0.5f : 1.0f;
             std::cout << "Alpha: " << a << std::endl;
+            break;
+        case GLFW_KEY_EQUAL: // + key (usually Shift + =)
+        case GLFW_KEY_KP_ADD: // Numpad +
+            if (mods & GLFW_MOD_SHIFT || key == GLFW_KEY_KP_ADD)
+            {
+                if (g_antialiasingLevel < 8)
+                {
+                    g_antialiasingLevel *= 2; // 2, 4, 8
+                    if (g_antialiasingLevel > 8) g_antialiasingLevel = 8;
+                    std::cout << "Antialiasing level: " << g_antialiasingLevel << "x (restart required)" << std::endl;
+                    saveSettings();
+                }
+            }
+            break;
+        case GLFW_KEY_MINUS: // - key
+        case GLFW_KEY_KP_SUBTRACT: // Numpad -
+            if (g_antialiasingLevel > 2)
+            {
+                g_antialiasingLevel /= 2; // 8, 4, 2
+                if (g_antialiasingLevel < 2) g_antialiasingLevel = 2;
+                std::cout << "Antialiasing level: " << g_antialiasingLevel << "x (restart required)" << std::endl;
+                saveSettings();
+            }
             break;
         }
     }
@@ -355,6 +403,20 @@ void init_assets()
     scene["quad"] = std::make_unique<Model>("resources/objects/quad.obj", *my_shader);
     scene["simple"] = std::make_unique<Model>("resources/objects/simple_triangle.obj", *my_shader);
 
+    // Initialize transparent objects - creating 3 semi-transparent objects with different alpha values
+    transparentObjects.clear();
+    transparentObjects.emplace_back("transparent_triangle1", glm::vec3(-2.0f, 1.5f, -4.0f), 
+                                   glm::vec3(0.0f), glm::vec3(0.8f), 
+                                   glm::vec4(1.0f, 0.2f, 0.2f, 0.7f)); // Semi-transparent red
+    
+    transparentObjects.emplace_back("transparent_triangle2", glm::vec3(0.0f, 1.5f, -5.0f), 
+                                   glm::vec3(0.0f), glm::vec3(0.8f), 
+                                   glm::vec4(0.2f, 1.0f, 0.2f, 0.5f)); // Semi-transparent green
+    
+    transparentObjects.emplace_back("transparent_triangle3", glm::vec3(2.0f, 1.5f, -6.0f), 
+                                   glm::vec3(0.0f), glm::vec3(0.8f), 
+                                   glm::vec4(0.2f, 0.2f, 1.0f, 0.3f)); // Semi-transparent blue
+
     // Set up projection matrix
     if (g_windowHeight <= 0)
         g_windowHeight = 1; // avoid division by 0
@@ -405,7 +467,96 @@ nlohmann::json loadSettings()
         defaultSettings["appname"] = "Graphics Application";
         defaultSettings["default_resolution"]["x"] = 800;
         defaultSettings["default_resolution"]["y"] = 600;
+        defaultSettings["antialiasing"]["enabled"] = false;
+        defaultSettings["antialiasing"]["level"] = 4;
         return defaultSettings;
+    }
+}
+
+// Function to validate and apply antialiasing settings
+void validateAntialiasingSettings(const nlohmann::json& settings)
+{
+    bool hasAA = settings.contains("antialiasing");
+    if (!hasAA)
+    {
+        std::cout << "No antialiasing settings found, using default: disabled" << std::endl;
+        g_antialisingEnabled = false;
+        g_antialiasingLevel = 4;
+        return;
+    }
+
+    const auto& aaSettings = settings["antialiasing"];
+    
+    // Get enabled status
+    if (aaSettings.contains("enabled") && aaSettings["enabled"].is_boolean())
+    {
+        g_antialisingEnabled = aaSettings["enabled"].get<bool>();
+    }
+    else
+    {
+        std::cerr << "Warning: Malformed antialiasing 'enabled' setting, using default: false" << std::endl;
+        g_antialisingEnabled = false;
+    }
+    
+    // Get level
+    if (aaSettings.contains("level") && aaSettings["level"].is_number_integer())
+    {
+        g_antialiasingLevel = aaSettings["level"].get<int>();
+    }
+    else
+    {
+        std::cerr << "Warning: Malformed antialiasing 'level' setting, using default: 4" << std::endl;
+        g_antialiasingLevel = 4;
+    }
+    
+    // Validate settings logic
+    if (g_antialisingEnabled && g_antialiasingLevel <= 1)
+    {
+        std::cerr << "Warning: Antialiasing is enabled but level is " << g_antialiasingLevel 
+                  << " (should be > 1). Disabling antialiasing." << std::endl;
+        g_antialisingEnabled = false;
+    }
+    
+    if (g_antialiasingLevel > 8)
+    {
+        std::cerr << "Warning: Antialiasing level " << g_antialiasingLevel 
+                  << " is too high (max recommended: 8). Clamping to 8." << std::endl;
+        g_antialiasingLevel = 8;
+    }
+    
+    std::cout << "Antialiasing: " << (g_antialisingEnabled ? "enabled" : "disabled")
+              << ", Level: " << g_antialiasingLevel << std::endl;
+}
+
+// Function to save current settings to JSON
+void saveSettings()
+{
+    try
+    {
+        nlohmann::json settings;
+        settings["appname"] = g_windowTitle;
+        settings["default_resolution"]["x"] = g_windowWidth;
+        settings["default_resolution"]["y"] = g_windowHeight;
+        settings["vsync_enabled"] = g_vSync;
+        settings["debug_mode"] = true;
+        settings["antialiasing"]["enabled"] = g_antialisingEnabled;
+        settings["antialiasing"]["level"] = g_antialiasingLevel;
+
+        std::ofstream settingsFile("app_settings.json");
+        if (settingsFile.is_open())
+        {
+            settingsFile << settings.dump(2) << std::endl;
+            settingsFile.close();
+            std::cout << "Settings saved to app_settings.json" << std::endl;
+        }
+        else
+        {
+            std::cerr << "Warning: Could not save settings to app_settings.json" << std::endl;
+        }
+    }
+    catch (const std::exception& e)
+    {
+        std::cerr << "Error saving settings: " << e.what() << std::endl;
     }
 }
 
@@ -415,6 +566,9 @@ int main()
     {
         // Load settings from JSON
         nlohmann::json settings = loadSettings();
+
+        // Validate and apply antialiasing settings
+        validateAntialiasingSettings(settings);
 
         // Get window resolution from settings
         if (settings["default_resolution"]["x"].is_number_integer() &&
@@ -428,6 +582,12 @@ int main()
         if (settings["appname"].is_string())
         {
             g_windowTitle = settings["appname"].get<std::string>();
+        }
+
+        // Get VSync setting
+        if (settings.contains("vsync_enabled") && settings["vsync_enabled"].is_boolean())
+        {
+            g_vSync = settings["vsync_enabled"].get<bool>();
         }
 
         std::cout << "Application: " << g_windowTitle << std::endl;
@@ -453,6 +613,13 @@ int main()
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
+
+        // Set antialiasing hints if enabled
+        if (g_antialisingEnabled)
+        {
+            glfwWindowHint(GLFW_SAMPLES, g_antialiasingLevel);
+            std::cout << "Setting up multisampling with " << g_antialiasingLevel << " samples" << std::endl;
+        }
 
         // Create window
         GLFWwindow *window = glfwCreateWindow(g_windowWidth, g_windowHeight, g_windowTitle.c_str(), NULL, NULL);
@@ -529,9 +696,29 @@ int main()
         // Enable depth testing
         glEnable(GL_DEPTH_TEST);
 
-        // Enable alpha blending
+        // Enable alpha blending for transparency
         glEnable(GL_BLEND);
-        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA); // Variables for FPS calculation
+        glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+        // Enable multisampling if antialiasing is enabled
+        if (g_antialisingEnabled)
+        {
+            glEnable(GL_MULTISAMPLE);
+            
+            // Verify multisampling is available
+            GLint samples;
+            glGetIntegerv(GL_SAMPLES, &samples);
+            std::cout << "Multisampling enabled with " << samples << " samples" << std::endl;
+            
+            if (samples == 0)
+            {
+                std::cerr << "Warning: Multisampling requested but not available!" << std::endl;
+            }
+        }
+        else
+        {
+            std::cout << "Antialiasing disabled" << std::endl;
+        } // Variables for FPS calculation
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
         float fps = 0.0f; // Print controls info
@@ -542,6 +729,8 @@ int main()
         std::cout << "C - Toggle camera control mode\n";
         std::cout << "Left mouse click - Set random color\n";
         std::cout << "Mouse wheel - Adjust alpha/transparency (or camera speed when camera mode is on)\n";
+        std::cout << "+/- keys - Increase/decrease antialiasing level (2x, 4x, 8x)\n";
+        std::cout << "F11 - Toggle antialiasing (requires restart)\n";
         std::cout << "F12 - Toggle VSync\n";
         std::cout << "ESC - Exit\n\n";
         std::cout << "Camera Controls (when enabled with C key):\n";
@@ -554,7 +743,12 @@ int main()
         std::cout << "Transformation Demo:\n";
         std::cout << "- Left object: Simple Y-axis rotation\n";
         std::cout << "- Center object: Translation (up/down) + Scaling\n";
-        std::cout << "- Right object: Multi-axis rotation\n\n"; // Variables for time-based animation
+        std::cout << "- Right object: Multi-axis rotation\n\n";
+
+        std::cout << "Transparency Demo:\n";
+        std::cout << "- 3 semi-transparent objects with different alpha values\n";
+        std::cout << "- Red (alpha 0.7), Green (alpha 0.5), Blue (alpha 0.3)\n";
+        std::cout << "- Objects are depth-sorted for correct transparency rendering\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -573,9 +767,10 @@ int main()
                 frameCount = 0;
                 lastTime = currentTime;
 
-                // Update window title with FPS and VSync status
+                // Update window title with FPS, VSync and Antialiasing status
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
-                                    " | VSync: " + (g_vSync ? "ON" : "OFF");
+                                    " | VSync: " + (g_vSync ? "ON" : "OFF") +
+                                    " | AA: " + (g_antialisingEnabled ? ("ON(" + std::to_string(g_antialiasingLevel) + "x)") : "OFF");
                 glfwSetWindowTitle(window, title.c_str());
             } // Process camera input and update view matrix
             if (cameraEnabled && camera)
@@ -605,12 +800,16 @@ int main()
 
             // Clear the screen
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); // Render models with controlled transformations to demonstrate each type
+            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
+
+            // STEP 1: Render opaque objects first
             my_shader->activate();
             my_shader->setUniform("uniform_Color", glm::vec4(r, g, b, a));
 
             // Set view matrix (updated each frame for camera movement)
-            my_shader->setUniform("uV_m", viewMatrix); // Triangle: Very subtle rotation around Y-axis (left object)
+            my_shader->setUniform("uV_m", viewMatrix); 
+
+            // Triangle: Very subtle rotation around Y-axis (left object)
             if (scene.find("triangle") != scene.end())
             {
                 glm::vec3 position(-1.5f, 0.0f, -3.0f);
@@ -636,6 +835,77 @@ int main()
                                    g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
                 glm::vec3 scale(0.8f); // Smaller scale
                 scene.at("simple")->draw(position, rotation, scale);
+            }
+
+            // STEP 2: Render transparent objects (back-to-front order)
+            if (!transparentObjects.empty())
+            {
+                // Calculate distances from camera and sort
+                glm::vec3 cameraPos = cameraEnabled && camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+                
+                for (auto& obj : transparentObjects)
+                {
+                    // Apply animation to positions
+                    glm::vec3 animatedPos = obj.position;
+                    if (g_animationEnabled)
+                    {
+                        // Different animation patterns for each transparent object
+                        if (obj.name == "transparent_triangle1")
+                        {
+                            animatedPos.y += sin(elapsedTime * 0.5f) * 0.3f;
+                        }
+                        else if (obj.name == "transparent_triangle2")
+                        {
+                            animatedPos.x += cos(elapsedTime * 0.7f) * 0.2f;
+                        }
+                        else if (obj.name == "transparent_triangle3")
+                        {
+                            animatedPos.z += sin(elapsedTime * 0.6f) * 0.1f;
+                        }
+                    }
+                    
+                    obj.distance = glm::length(cameraPos - animatedPos);
+                }
+                
+                // Sort by distance (farthest first for correct alpha blending)
+                std::sort(transparentObjects.begin(), transparentObjects.end(),
+                         [](const TransparentObject& a, const TransparentObject& b) {
+                             return a.distance > b.distance;
+                         });
+                
+                // Render transparent objects back-to-front
+                for (const auto& obj : transparentObjects)
+                {
+                    // Apply animation to positions (same logic as above for consistency)
+                    glm::vec3 animatedPos = obj.position;
+                    glm::vec3 animatedRot = obj.rotation;
+                    if (g_animationEnabled)
+                    {
+                        if (obj.name == "transparent_triangle1")
+                        {
+                            animatedPos.y += sin(elapsedTime * 0.5f) * 0.3f;
+                            animatedRot.y = elapsedTime * 15.0f;
+                        }
+                        else if (obj.name == "transparent_triangle2")
+                        {
+                            animatedPos.x += cos(elapsedTime * 0.7f) * 0.2f;
+                            animatedRot.x = elapsedTime * 20.0f;
+                        }
+                        else if (obj.name == "transparent_triangle3")
+                        {
+                            animatedPos.z += sin(elapsedTime * 0.6f) * 0.1f;
+                            animatedRot.z = elapsedTime * 12.0f;
+                        }
+                    }
+                    
+                    my_shader->setUniform("uniform_Color", obj.color);
+                    
+                    // Use triangle model for transparent objects (could be any model)
+                    if (scene.find("triangle") != scene.end())
+                    {
+                        scene.at("triangle")->draw(animatedPos, animatedRot, obj.scale);
+                    }
+                }
             }
 
             my_shader->deactivate();

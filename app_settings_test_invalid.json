@@ -1,0 +1,13 @@
+{
+  "appname": "OpenGL Application - Test Invalid AA",
+  "default_resolution": {
+    "x": 1024,
+    "y": 768
+  },
+  "vsync_enabled": true,
+  "debug_mode": true,
+  "antialiasing": {
+    "enabled": true,
+    "level": 1
+  }
+}
