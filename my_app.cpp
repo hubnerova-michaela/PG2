@@ -898,9 +898,8 @@ int main()
                         }
                     }
                     
-                    my_shader->setUniform("uniform_Color", obj.color);
-                    
                     // Use triangle model for transparent objects (could be any model)
+                    // Note: This will use the same color as the main objects (r,g,b,a)
                     if (scene.find("triangle") != scene.end())
                     {
                         scene.at("triangle")->draw(animatedPos, animatedRot, obj.scale);
