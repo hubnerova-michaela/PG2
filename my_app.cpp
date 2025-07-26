@@ -25,6 +25,7 @@
 #include "Model.hpp"
 #include "camera.hpp"
 #include "assets.hpp"
+#include "lighting.hpp"
 
 // Vertex structure definition
 struct vertex
@@ -45,6 +46,7 @@ int g_antialiasingLevel = 4;
 
 // GL objects and shader program
 std::unique_ptr<ShaderProgram> my_shader;
+std::unique_ptr<LightingSystem> lightingSystem;
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
@@ -135,6 +137,22 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     {
         camera->MovementSpeed = 2.5f;
         std::cout << "Camera speed reset to: " << camera->MovementSpeed << std::endl;
+    }
+
+    // Toggle spot light with L key
+    if (key == GLFW_KEY_L && action == GLFW_PRESS && lightingSystem)
+    {
+        // Toggle spot light intensity
+        static bool spotLightOn = true;
+        spotLightOn = !spotLightOn;
+        if (spotLightOn) {
+            lightingSystem->spotLight.diffuse = glm::vec3(1.0f, 1.0f, 1.0f);
+            lightingSystem->spotLight.specular = glm::vec3(1.0f, 1.0f, 1.0f);
+        } else {
+            lightingSystem->spotLight.diffuse = glm::vec3(0.0f, 0.0f, 0.0f);
+            lightingSystem->spotLight.specular = glm::vec3(0.0f, 0.0f, 0.0f);
+        }
+        std::cout << "Spot light (headlight): " << (spotLightOn ? "ON" : "OFF") << std::endl;
     }
 
     // Change triangle color with different keys
@@ -395,8 +413,12 @@ void checkGLError(const std::string &location)
 // Function to initialize assets and shaders
 void init_assets()
 {
-    // Notice: code massively simplified - all moved to specific classes    // shader: load, compile, link, initialize params
-    my_shader = std::make_unique<ShaderProgram>("resources/shaders/basic.vert", "resources/shaders/basic.frag");
+    // Notice: code massively simplified - all moved to specific classes    
+    // shader: load, compile, link, initialize params - using lighting shaders
+    my_shader = std::make_unique<ShaderProgram>("resources/shaders/phong.vert", "resources/shaders/phong.frag");
+
+    // Initialize lighting system
+    lightingSystem = std::make_unique<LightingSystem>();
 
     // model: load model files to test enhanced OBJ loader
     scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
@@ -727,6 +749,7 @@ int main()
         std::cout << "T key - Toggle alpha/transparency\n";
         std::cout << "SPACE - Toggle animation on/off\n";
         std::cout << "C - Toggle camera control mode\n";
+        std::cout << "L - Toggle spot light (headlight) on/off\n";
         std::cout << "Left mouse click - Set random color\n";
         std::cout << "Mouse wheel - Adjust alpha/transparency (or camera speed when camera mode is on)\n";
         std::cout << "+/- keys - Increase/decrease antialiasing level (2x, 4x, 8x)\n";
@@ -748,7 +771,13 @@ int main()
         std::cout << "Transparency Demo:\n";
         std::cout << "- 3 semi-transparent objects with different alpha values\n";
         std::cout << "- Red (alpha 0.7), Green (alpha 0.5), Blue (alpha 0.3)\n";
-        std::cout << "- Objects are depth-sorted for correct transparency rendering\n\n"; // Variables for time-based animation
+        std::cout << "- Objects are depth-sorted for correct transparency rendering\n\n";
+
+        std::cout << "Lighting Demo:\n";
+        std::cout << "- Directional light: Animated sun with color changes\n";
+        std::cout << "- Point lights: 3 colored lights (red, green, blue) with motion\n";
+        std::cout << "- Spot light: Camera-attached headlight (toggle with L key)\n";
+        std::cout << "- Phong lighting model with ambient, diffuse, and specular components\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -802,9 +831,30 @@ int main()
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
 
+            // Update lighting system
+            if (lightingSystem) {
+                // Update animated lights
+                lightingSystem->updateLights(elapsedTime);
+                
+                // Update spot light to follow camera (headlight effect)
+                if (camera) {
+                    lightingSystem->spotLight.position = camera->Position;
+                    lightingSystem->spotLight.direction = camera->Front;
+                } else {
+                    // Static camera fallback
+                    lightingSystem->spotLight.position = glm::vec3(0.0f, 2.0f, 5.0f);
+                    lightingSystem->spotLight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
+                }
+                
+                // Get current camera position for lighting calculations
+                glm::vec3 viewPos = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+                
+                // Setup lighting uniforms
+                lightingSystem->setupLightUniforms(*my_shader, viewPos);
+            }
+
             // STEP 1: Render opaque objects first
             my_shader->activate();
-            my_shader->setUniform("uniform_Color", glm::vec4(r, g, b, a));
 
             // Set view matrix (updated each frame for camera movement)
             my_shader->setUniform("uV_m", viewMatrix); 

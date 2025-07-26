@@ -132,6 +132,10 @@ public:
 
         // Set model matrix uniform
         shader.setUniform("uM_m", model);
+        
+        // Calculate and set normal matrix (inverse transpose of model matrix)
+        glm::mat3 normal_matrix = glm::mat3(glm::transpose(glm::inverse(model)));
+        shader.setUniform("uNormal_m", normal_matrix);
 
         // Draw mesh
         glBindVertexArray(VAO);
@@ -153,6 +157,10 @@ public:
 
         // Set model matrix uniform
         shader.setUniform("uM_m", model_matrix);
+        
+        // Calculate and set normal matrix (inverse transpose of model matrix)
+        glm::mat3 normal_matrix = glm::mat3(glm::transpose(glm::inverse(model_matrix)));
+        shader.setUniform("uNormal_m", normal_matrix);
 
         // Draw mesh
         glBindVertexArray(VAO);
