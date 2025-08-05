@@ -146,8 +146,10 @@
     </Link>
   </ItemDefinitionGroup>
   <ItemGroup>
+    <ClCompile Include="AudioEngine.cpp" />
     <ClCompile Include="lighting.cpp" />
     <ClCompile Include="Mesh.cpp" />
+    <ClCompile Include="miniaudio.cpp" />
     <ClCompile Include="Model.cpp" />
     <ClCompile Include="OBJloader.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
@@ -165,9 +167,11 @@
   </ItemGroup>
   <ItemGroup>
     <ClInclude Include="assets.hpp" />
+    <ClInclude Include="AudioEngine.hpp" />
     <ClInclude Include="camera.hpp" />
     <ClInclude Include="lighting.hpp" />
     <ClInclude Include="Mesh.hpp" />
+    <ClInclude Include="miniaudio.h" />
     <ClInclude Include="Model.hpp" />
     <ClInclude Include="OBJloader.hpp" />
     <ClInclude Include="ParticleSystem.hpp" />

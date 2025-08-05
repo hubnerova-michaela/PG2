@@ -28,6 +28,7 @@
 #include "lighting.hpp"
 #include "ParticleSystem.hpp"
 #include "PhysicsSystem.hpp"
+#include "AudioEngine.hpp"
 #include "particles.cpp"
 
 // Vertex structure definition
@@ -53,6 +54,7 @@ std::unique_ptr<ShaderProgram> particle_shader;
 std::unique_ptr<LightingSystem> lightingSystem;
 std::unique_ptr<ParticleSystem> particleSystem;
 std::unique_ptr<PhysicsSystem> physicsSystem;
+std::unique_ptr<AudioEngine> audioEngine;
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
@@ -61,6 +63,7 @@ std::vector<TransparentObject> transparentObjects;
 
 // Animation control
 bool g_animationEnabled = true;
+unsigned int g_triangleSoundHandle = 0; // Handle for triangle audio
 
 // Transformation matrices
 glm::mat4 projectionMatrix{1.0f};
@@ -452,9 +455,21 @@ void init_assets()
         std::cout << "Object hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
     });
     
-    // Initialize particle system
     particleSystem = std::make_unique<ParticleSystem>(*particle_shader, 1000);
     particleSystem->setEmitterPosition(glm::vec3(0.0f, 10.0f, -5.0f));
+
+    audioEngine = std::make_unique<AudioEngine>();
+    if (audioEngine->init()) {
+        std::cout << "Audio engine initialized successfully" << std::endl;
+        glm::vec3 quadPosition(0.0f, 0.0f, -3.0f);
+        std::cout << "Attempting to load audio file: resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav" << std::endl;
+        if (audioEngine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_triangleSoundHandle)) {
+            std::cout << "Triangle audio started successfully at position: " << quadPosition.x << ", " << quadPosition.y << ", " << quadPosition.z << std::endl;
+            std::cout << "Triangle sound handle: " << g_triangleSoundHandle << std::endl;
+        }
+    } else {
+        std::cout << "Failed to initialize audio engine" << std::endl;
+    }
 
     // model: load model files to test enhanced OBJ loader
     scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
@@ -831,7 +846,15 @@ int main()
         std::cout << "- Gravity, ground collision, and bounce effects\n";
         std::cout << "- Dynamic particle lifecycle with fade-out\n";
         std::cout << "- Emitter follows camera position\n";
-        std::cout << "- Point-based rendering with size variation\n\n"; // Variables for time-based animation
+        std::cout << "- Point-based rendering with size variation\n\n";
+        
+        std::cout << "3D Spatial Audio Demo:\n";
+        std::cout << "- Triangle emits looping 3D spatial audio\n";
+        std::cout << "- Audio position follows triangle object\n";
+        std::cout << "- Listener position and orientation follow camera\n";
+        std::cout << "- Move camera around to hear directional audio effects\n";
+        std::cout << "- Audio will be louder/quieter based on distance to triangle\n";
+        std::cout << "- Sound will pan left/right based on triangle's relative position\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -884,6 +907,14 @@ int main()
                 viewMatrix = camera->GetViewMatrix();
             }
 
+            // Update 3D audio listener position based on camera
+            if (audioEngine && audioEngine->isInitialized()) {
+                glm::vec3 listenerPos = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+                glm::vec3 listenerFront = camera ? camera->Front : glm::vec3(0.0f, 0.0f, -1.0f);
+                glm::vec3 listenerUp = camera ? camera->Up : glm::vec3(0.0f, 1.0f, 0.0f);
+                audioEngine->setListener(listenerPos, listenerFront, listenerUp);
+            }
+
             // Clear the screen
             glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
@@ -922,6 +953,12 @@ int main()
                 glm::vec3 position(-1.5f, 0.0f, -3.0f);
                 glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 8.0f : 0.0f, 0.0f); // Very slow Y rotation
                 glm::vec3 scale(1.0f);                                                          // No scaling
+                
+                // Update triangle audio position to match visual position
+                if (audioEngine && audioEngine->isInitialized() && g_triangleSoundHandle != 0) {
+                    audioEngine->setSoundPosition(g_triangleSoundHandle, position);
+                }
+                
                 scene.at("triangle")->draw(position, rotation, scale);
             }
 

@@ -3,6 +3,7 @@
     "glew",
     "glfw3",
     "glm",
+    "miniaudio",
     "nlohmann-json"
   ]
 }
