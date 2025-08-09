@@ -1270,7 +1270,11 @@ int main()
                         std::cout << "Drawing house " << houseIndex << " of type " << houseType << " at position (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
                         std::cout << "  Scale: (" << scl.x << ", " << scl.y << ", " << scl.z << ")" << std::endl;
                     }
-                    scene.at(houseType)->draw(pos, rot, scl);
+                    // Setup lighting uniforms for house shader before drawing each house
+                    if (lightingSystem && my_shader && camera) {
+                        lightingSystem->setupLightUniforms(*my_shader, camera->Position);
+                    }
+                scene.at(houseType)->draw(pos, rot, scl);
                 } else {
                     std::cout << "House type " << houseType << " not found in scene!" << std::endl;
                 }

@@ -123,6 +123,16 @@ public:
 
         shader.activate();
 
+        // Bind texture if available
+        if (texture_id != 0) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            shader.setUniform("material_hasTexture", 1);
+            shader.setUniform("material_diffuseTex", 0); // sampler2D location 0
+        } else {
+            shader.setUniform("material_hasTexture", 0);
+        }
+
         // Create transformation matrix using the offset and rotation
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, origin + offset);
@@ -138,15 +148,20 @@ public:
         shader.setUniform("uNormal_m", normal_matrix);
 
         // Set material properties
-        shader.setUniform("material.ambient", glm::vec3(ambient_material));
-        shader.setUniform("material.diffuse", glm::vec3(diffuse_material));
-        shader.setUniform("material.specular", glm::vec3(specular_material));
-        shader.setUniform("material.shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
+        shader.setUniform("material_ambient", glm::vec3(ambient_material));
+        shader.setUniform("material_diffuse", glm::vec3(diffuse_material));
+        shader.setUniform("material_specular", glm::vec3(specular_material));
+        shader.setUniform("material_shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
 
         // Draw mesh
         glBindVertexArray(VAO);
         glDrawElements(primitive_type, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
+
+        // Unbind texture
+        if (texture_id != 0) {
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
 
         shader.deactivate();
     }
@@ -169,6 +184,16 @@ public:
 
         shader.activate();
 
+        // Bind texture if available
+        if (texture_id != 0) {
+            glActiveTexture(GL_TEXTURE0);
+            glBindTexture(GL_TEXTURE_2D, texture_id);
+            shader.setUniform("material_hasTexture", 1);
+            shader.setUniform("material_diffuseTex", 0); // sampler2D location 0
+        } else {
+            shader.setUniform("material_hasTexture", 0);
+        }
+
         // Set model matrix uniform
         shader.setUniform("uM_m", model_matrix);
         
@@ -177,15 +202,20 @@ public:
         shader.setUniform("uNormal_m", normal_matrix);
 
         // Set material properties
-        shader.setUniform("material.ambient", glm::vec3(ambient_material));
-        shader.setUniform("material.diffuse", glm::vec3(diffuse_material));
-        shader.setUniform("material.specular", glm::vec3(specular_material));
-        shader.setUniform("material.shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
+        shader.setUniform("material_ambient", glm::vec3(ambient_material));
+        shader.setUniform("material_diffuse", glm::vec3(diffuse_material));
+        shader.setUniform("material_specular", glm::vec3(specular_material));
+        shader.setUniform("material_shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
 
         // Draw mesh
         glBindVertexArray(VAO);
         glDrawElements(primitive_type, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
         glBindVertexArray(0);
+
+        // Unbind texture
+        if (texture_id != 0) {
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
 
         shader.deactivate();
     }
