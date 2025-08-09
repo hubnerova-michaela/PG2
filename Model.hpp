@@ -37,8 +37,30 @@ public:
         if (!loadOBJ(filename.string().c_str(), obj_vertices, obj_uvs, obj_normals))
         {
             std::cerr << "Failed to load OBJ file: " << filename << std::endl;
-            return;
+            throw std::runtime_error("OBJ loading failed for " + filename.string());
         }
+
+        std::cout << "DEBUG Model '" << filename.filename().string() << "': loaded " 
+                  << obj_vertices.size() << " vertices, " 
+                  << obj_uvs.size() << " UVs, " 
+                  << obj_normals.size() << " normals" << std::endl;
+
+        // Check if we have any geometry at all
+        if (obj_vertices.empty()) {
+            std::cerr << "ERROR: No vertices loaded for " << filename << std::endl;
+            throw std::runtime_error("No vertices in OBJ file: " + filename.string());
+        }
+
+        // Calculate bounding box to check model scale
+        glm::vec3 minBounds(FLT_MAX), maxBounds(-FLT_MAX);
+        for (const auto& vertex : obj_vertices) {
+            minBounds = glm::min(minBounds, vertex);
+            maxBounds = glm::max(maxBounds, vertex);
+        }
+        glm::vec3 size = maxBounds - minBounds;
+        std::cout << "DEBUG Model bounds: min(" << minBounds.x << "," << minBounds.y << "," << minBounds.z 
+                  << ") max(" << maxBounds.x << "," << maxBounds.y << "," << maxBounds.z 
+                  << ") size(" << size.x << "," << size.y << "," << size.z << ")" << std::endl;
 
         // Convert to our vertex format and create indices
         std::vector<Vertex> vertices;
@@ -76,6 +98,42 @@ public:
         // Create mesh and add to model
         name = filename.stem().string();
         meshes.emplace_back(GL_TRIANGLES, shader, vertices, indices, glm::vec3(0.0f), glm::vec3(0.0f), 0);
+        
+        // Set reasonable default material properties for visibility
+        if (!meshes.empty()) {
+            // Use different materials for different house types for variety
+            if (name == "house") {
+                // Brown wood material
+                meshes[0].ambient_material = glm::vec4(0.15f, 0.07f, 0.02f, 1.0f);   // Dark brown ambient
+                meshes[0].diffuse_material = glm::vec4(0.73f, 0.32f, 0.07f, 1.0f);   // Beech wood diffuse
+                meshes[0].specular_material = glm::vec4(0.5f, 0.5f, 0.5f, 1.0f);     // Gray specular
+                meshes[0].reflectivity = 0.5f; 
+            } else if (name == "Bambo_House") {
+                // Green bamboo material
+                meshes[0].ambient_material = glm::vec4(0.05f, 0.15f, 0.05f, 1.0f);   // Dark green ambient
+                meshes[0].diffuse_material = glm::vec4(0.3f, 0.7f, 0.2f, 1.0f);     // Green diffuse
+                meshes[0].specular_material = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);    // Low specular
+                meshes[0].reflectivity = 0.3f; 
+            } else if (name == "Cyprys_House") {
+                // Gray stone material
+                meshes[0].ambient_material = glm::vec4(0.1f, 0.1f, 0.12f, 1.0f);    // Dark gray ambient
+                meshes[0].diffuse_material = glm::vec4(0.6f, 0.6f, 0.7f, 1.0f);     // Light gray diffuse
+                meshes[0].specular_material = glm::vec4(0.4f, 0.4f, 0.4f, 1.0f);    // Gray specular
+                meshes[0].reflectivity = 0.4f; 
+            } else if (name == "Building,") {
+                // Red brick material
+                meshes[0].ambient_material = glm::vec4(0.15f, 0.05f, 0.05f, 1.0f);  // Dark red ambient
+                meshes[0].diffuse_material = glm::vec4(0.8f, 0.3f, 0.2f, 1.0f);     // Red brick diffuse
+                meshes[0].specular_material = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);    // Low specular
+                meshes[0].reflectivity = 0.2f; 
+            } else {
+                // Default material
+                meshes[0].ambient_material = glm::vec4(0.2f, 0.2f, 0.2f, 1.0f);   // Dark gray ambient
+                meshes[0].diffuse_material = glm::vec4(0.8f, 0.6f, 0.4f, 1.0f);   // Light brown diffuse
+                meshes[0].specular_material = glm::vec4(0.3f, 0.3f, 0.3f, 1.0f);  // Gray specular
+                meshes[0].reflectivity = 0.5f; 
+            }
+        }
     }
 
     // Move constructor

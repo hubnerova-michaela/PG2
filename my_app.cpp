@@ -42,6 +42,66 @@ struct vertex
     glm::vec3 position;
 };
 
+// Road rendering globals
+static GLuint g_roadVAO = 0;
+static GLuint g_roadVBO = 0;
+static GLuint g_roadEBO = 0;
+
+// Function to initialize road geometry
+void initRoadGeometry() {
+    // Create a simple quad for road segments
+    float roadVertices[] = {
+        // positions        // texture coords
+        -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  // bottom left
+         0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  // bottom right
+         0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  // top right
+        -0.5f, 0.0f,  0.5f,  0.0f, 1.0f   // top left
+    };
+    
+    unsigned int roadIndices[] = {
+        0, 1, 2,  // first triangle
+        0, 2, 3   // second triangle
+    };
+    
+    glGenVertexArrays(1, &g_roadVAO);
+    glGenBuffers(1, &g_roadVBO);
+    glGenBuffers(1, &g_roadEBO);
+    
+    glBindVertexArray(g_roadVAO);
+    
+    glBindBuffer(GL_ARRAY_BUFFER, g_roadVBO);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(roadVertices), roadVertices, GL_STATIC_DRAW);
+    
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_roadEBO);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(roadIndices), roadIndices, GL_STATIC_DRAW);
+    
+    // Position attribute
+    glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
+    glEnableVertexAttribArray(0);
+    
+    // Texture coordinate attribute
+    glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(2);
+    
+    glBindVertexArray(0);
+}
+
+// Function to cleanup road geometry
+void cleanupRoadGeometry() {
+    if (g_roadVAO != 0) {
+        glDeleteVertexArrays(1, &g_roadVAO);
+        g_roadVAO = 0;
+    }
+    if (g_roadVBO != 0) {
+        glDeleteBuffers(1, &g_roadVBO);
+        g_roadVBO = 0;
+    }
+    if (g_roadEBO != 0) {
+        glDeleteBuffers(1, &g_roadEBO);
+        g_roadEBO = 0;
+    }
+}
+
 // Forward declarations
 void saveSettings();
 
@@ -507,6 +567,9 @@ void init_assets()
     cupcakeGame = std::make_unique<CupcakeGame>();
     cupcakeGame->initialize();
 
+    // Initialize road geometry
+    initRoadGeometry();
+
     // Load road texture (JPEG): resources/textures/asphalt.jpg using inline OpenCV helpers
     {
         const std::filesystem::path texPath = "resources/textures/asphalt.jpg";
@@ -553,10 +616,32 @@ void init_assets()
         std::cout << "Failed to initialize audio engine" << std::endl;
     }
 
-    // model: load model files to test enhanced OBJ loader
-    scene["triangle"] = std::make_unique<Model>("resources/objects/triangle.obj", *my_shader);
-    scene["quad"] = std::make_unique<Model>("resources/objects/quad.obj", *my_shader);
-    scene["simple"] = std::make_unique<Model>("resources/objects/simple_triangle.obj", *my_shader);
+    // Load house models for the route with error handling
+    std::cout << "Starting to load house models..." << std::endl;
+    
+    // Try to load each house model and only add to scene if successful
+    std::vector<std::pair<std::string, std::string>> houseModels = {
+        {"house", "resources/objects/house.obj"},
+        {"bambo_house", "resources/objects/Bambo_House.obj"},
+        {"cyprys_house", "resources/objects/Cyprys_House.obj"},
+        {"building", "resources/objects/Building,.obj"}
+    };
+    
+    for (const auto& [name, path] : houseModels) {
+        try {
+            std::cout << "Attempting to load " << path << "..." << std::endl;
+            auto model = std::make_unique<Model>(path, *my_shader);
+            std::cout << "Successfully loaded " << name << " with " << model->meshes.size() << " meshes" << std::endl;
+            scene[name] = std::move(model);
+        } catch (const std::exception& e) {
+            std::cerr << "FAILED to load " << name << " from " << path << ": " << e.what() << std::endl;
+        }
+    }
+    
+    std::cout << "Scene now contains " << scene.size() << " models:" << std::endl;
+    for (const auto& pair : scene) {
+        std::cout << "  - " << pair.first << std::endl;
+    }
 
     // Initialize transparent objects - creating 3 semi-transparent objects with different alpha values
     transparentObjects.clear();
@@ -1095,68 +1180,101 @@ int main()
                 scene.at("triangle")->draw(position, rotation, scale);
             }
 
-            // Draw road segments with road texture (if available)
-            if (scene.find("quad") != scene.end()) {
-                bool skippedFirst = false;
-                // Activate road shader (uses simple MVP; our Model::draw sets matrices via my_shader, so bind manually)
-                if (!road_shader) {
-                    std::cerr << "Road shader is null, skipping road rendering" << std::endl;
-                } else {
-                    road_shader->activate();
-                }
+            // Draw road segments with road texture (direct rendering)
+            if (road_shader && g_roadVAO != 0) {
+                road_shader->activate();
+                
                 // Set shared matrices
-                if (road_shader) {
-                    road_shader->setUniform("uV_m", viewMatrix);
-                    road_shader->setUniform("uProj_m", projectionMatrix);
-                    road_shader->setUniform("uniform_Color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
-                }
+                road_shader->setUniform("uV_m", viewMatrix);
+                road_shader->setUniform("uProj_m", projectionMatrix);
+                road_shader->setUniform("uniform_Color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
 
-                // Bind texture unit 0 and set texture uniforms
+                // Bind texture and set uniforms
                 if (g_roadTex != 0) {
                     glActiveTexture(GL_TEXTURE0);
                     glBindTexture(GL_TEXTURE_2D, g_roadTex);
-                    if (road_shader) {
-                        road_shader->setUniform("textureSampler", 0);
-                        road_shader->setUniform("useTexture", true);
-                    }
+                    road_shader->setUniform("textureSampler", 0);
+                    road_shader->setUniform("useTexture", true);
                 } else {
-                    if (road_shader) {
-                        road_shader->setUniform("useTexture", false);
-                    }
+                    road_shader->setUniform("useTexture", false);
                 }
 
+                // Bind the road VAO
+                glBindVertexArray(g_roadVAO);
+
+                bool skippedFirst = false;
                 for (const auto& seg : cupcakeGame->getGameState().roadSegments) {
                     if (!skippedFirst) { skippedFirst = true; continue; } // skip initial rectangle
+                    
                     glm::vec3 pos(seg.x, -0.01f, seg.z);
-                    glm::vec3 rot(0.0f);
                     glm::vec3 scl(3.2f, 1.0f, cupcakeGame->getGameState().roadSegmentLength * 0.50f);
 
-                    // Manually draw a textured strip using immediate mode fallback (two triangles) if Model doesn't support UVs.
-                    // Build a simple VBO-less draw call using glBegin/glEnd is not available in core profile; instead render the quad model for geometry
-                    // and rely on shader sampling with generated UVs from world position.
-
-                    // Reuse the existing model draw for transforms but switch shader: call triangle/quad model with our road_shader active
-                    // If Model::draw always uses its own shader, we approximate by drawing colored and letting texture bind affect fragment shader if it samples.
-                    scene.at("quad")->draw(pos, rot, scl);
+                    // Create transformation matrix
+                    glm::mat4 model = glm::mat4(1.0f);
+                    model = glm::translate(model, pos);
+                    model = glm::scale(model, scl);
+                    
+                    // Set model matrix
+                    road_shader->setUniform("uM_m", model);
+                    
+                    // Draw the road segment
+                    glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 }
 
-                // Unbind texture
+                // Cleanup
+                glBindVertexArray(0);
                 if (g_roadTex != 0) {
                     glBindTexture(GL_TEXTURE_2D, 0);
                 }
-                if (road_shader) {
-                    road_shader->deactivate();
-                }
+                road_shader->deactivate();
             }
 
-            // Draw houses as scaled triangles/quads placeholders (use triangle model scaled as a box stand-in)
+            // Draw houses as actual house models along the route
+            const std::vector<std::string> houseTypes = {"house", "bambo_house", "cyprys_house", "building"};
+            int houseIndex = 0;
+            
             for (const auto& h : cupcakeGame->getGameState().houses) {
+                
+                // Always render a triangle first as a fallback to ensure something is visible
                 if (scene.find("triangle") != scene.end()) {
                     glm::vec3 pos = h.position;
+                    pos.y += 3.0f; // Offset triangle above house position
                     glm::vec3 rot(0.0f);
-                    glm::vec3 scl(1.5f, 2.5f, 1.0f);
+                    glm::vec3 scl(0.5f, 0.5f, 0.5f); // Small triangle as marker
                     scene.at("triangle")->draw(pos, rot, scl);
                 }
+                
+                // Cycle through different house types for variety
+                const std::string& houseType = houseTypes[houseIndex % houseTypes.size()];
+                
+                if (scene.find(houseType) != scene.end()) {
+                    glm::vec3 pos = h.position;
+                    glm::vec3 rot(0.0f);
+                    
+                    // Use appropriate scales based on model sizes (from debug output)
+                    glm::vec3 scl;
+                    if (houseType == "building") {
+                        scl = glm::vec3(0.05f, 0.05f, 0.05f); // Building might be large like house
+                    } else if (houseType == "bambo_house") {
+                        scl = glm::vec3(0.5f, 0.5f, 0.5f); // Bambo house is ~14 units, scale down
+                    } else if (houseType == "cyprys_house") {
+                        scl = glm::vec3(0.3f, 0.3f, 0.3f); // Assume similar to bambo house
+                    } else { // house.obj
+                        scl = glm::vec3(0.02f, 0.02f, 0.02f); // House is ~220 units, scale way down
+                    }
+                    
+                    // Add some variation in Y rotation for more natural look
+                    rot.y = (houseIndex * 47.0f) * (3.14159f / 180.0f); // Convert degrees to radians
+                    
+                    if (houseIndex < 1) { // Only debug first house
+                        std::cout << "Drawing house " << houseIndex << " of type " << houseType << " at position (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
+                        std::cout << "  Scale: (" << scl.x << ", " << scl.y << ", " << scl.z << ")" << std::endl;
+                    }
+                    scene.at(houseType)->draw(pos, rot, scl);
+                } else {
+                    std::cout << "House type " << houseType << " not found in scene!" << std::endl;
+                }
+                houseIndex++;
             }
 
             // Place particle effects near the "active" house as a big green semi-transparent aura
@@ -1335,6 +1453,7 @@ int main()
         if (particle_shader) {
             particle_shader->clear();
         }
+        cleanupRoadGeometry();
 
         // Clean up
         glfwDestroyWindow(window);

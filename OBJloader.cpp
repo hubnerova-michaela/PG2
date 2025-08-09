@@ -58,92 +58,59 @@ bool loadOBJ(const char *path, std::vector<glm::vec3> &out_vertices, std::vector
 			char faceLine[MAX_LINE_SIZE];
 			fgets(faceLine, MAX_LINE_SIZE, file);
 
-			// Try to parse different face formats
-			unsigned int vertexIndex[4], uvIndex[4], normalIndex[4];
-			int matches = 0;
-
-			// Try format: v/vt/vn v/vt/vn v/vt/vn [v/vt/vn]
-			matches = sscanf_s(faceLine, "%d/%d/%d %d/%d/%d %d/%d/%d %d/%d/%d",
-												 &vertexIndex[0], &uvIndex[0], &normalIndex[0],
-												 &vertexIndex[1], &uvIndex[1], &normalIndex[1],
-												 &vertexIndex[2], &uvIndex[2], &normalIndex[2],
-												 &vertexIndex[3], &uvIndex[3], &normalIndex[3]);
-
-			if (matches >= 9)
-			{
-				// v/vt/vn format
-				if (matches == 9)
-				{
-					// Triangle
-					vertexIndices.push_back(vertexIndex[0]);
-					vertexIndices.push_back(vertexIndex[1]);
-					vertexIndices.push_back(vertexIndex[2]);
-					uvIndices.push_back(uvIndex[0]);
-					uvIndices.push_back(uvIndex[1]);
-					uvIndices.push_back(uvIndex[2]);
-					normalIndices.push_back(normalIndex[0]);
-					normalIndices.push_back(normalIndex[1]);
-					normalIndices.push_back(normalIndex[2]);
+			// Parse face line to handle various formats and polygon triangulation
+			std::vector<unsigned int> faceVertices, faceUVs, faceNormals;
+			
+			// Parse each vertex in the face
+			char* context = nullptr;
+			char* token = strtok_s(faceLine, " \t\n", &context);
+			while (token != nullptr) {
+				unsigned int v = 0, vt = 0, vn = 0;
+				
+				// Try different face formats
+				if (sscanf_s(token, "%d/%d/%d", &v, &vt, &vn) == 3) {
+					// v/vt/vn format (vertex/texture/normal)
+					faceVertices.push_back(v);
+					faceUVs.push_back(vt);
+					faceNormals.push_back(vn);
 				}
-				else if (matches == 12)
-				{
-					// Quad - split into two triangles
-					// Triangle 1: v0, v1, v2
-					vertexIndices.push_back(vertexIndex[0]);
-					vertexIndices.push_back(vertexIndex[1]);
-					vertexIndices.push_back(vertexIndex[2]);
-					uvIndices.push_back(uvIndex[0]);
-					uvIndices.push_back(uvIndex[1]);
-					uvIndices.push_back(uvIndex[2]);
-					normalIndices.push_back(normalIndex[0]);
-					normalIndices.push_back(normalIndex[1]);
-					normalIndices.push_back(normalIndex[2]);
-
-					// Triangle 2: v0, v2, v3
-					vertexIndices.push_back(vertexIndex[0]);
-					vertexIndices.push_back(vertexIndex[2]);
-					vertexIndices.push_back(vertexIndex[3]);
-					uvIndices.push_back(uvIndex[0]);
-					uvIndices.push_back(uvIndex[2]);
-					uvIndices.push_back(uvIndex[3]);
-					normalIndices.push_back(normalIndex[0]);
-					normalIndices.push_back(normalIndex[2]);
-					normalIndices.push_back(normalIndex[3]);
+				else if (sscanf_s(token, "%d//%d", &v, &vn) == 2) {
+					// v//vn format (vertex//normal, no texture)
+					faceVertices.push_back(v);
+					faceUVs.push_back(0); // No UV, will be handled later
+					faceNormals.push_back(vn);
 				}
+				else if (sscanf_s(token, "%d/%d", &v, &vt) == 2) {
+					// v/vt format (vertex/texture, no normal)
+					faceVertices.push_back(v);
+					faceUVs.push_back(vt);
+					faceNormals.push_back(0); // No normal, will be calculated later
+				}
+				else if (sscanf_s(token, "%d", &v) == 1) {
+					// v format (vertex only)
+					faceVertices.push_back(v);
+					faceUVs.push_back(0);
+					faceNormals.push_back(0);
+				}
+				
+				token = strtok_s(nullptr, " \t\n", &context);
 			}
-			else
-			{
-				// Try format: v v v [v] (vertex indices only)
-				matches = sscanf_s(faceLine, "%d %d %d %d",
-													 &vertexIndex[0], &vertexIndex[1], &vertexIndex[2], &vertexIndex[3]);
-
-				if (matches >= 3)
-				{
-					if (matches == 3)
-					{
-						// Triangle
-						vertexIndices.push_back(vertexIndex[0]);
-						vertexIndices.push_back(vertexIndex[1]);
-						vertexIndices.push_back(vertexIndex[2]);
-					}
-					else if (matches == 4)
-					{
-						// Quad - split into two triangles
-						// Triangle 1: v0, v1, v2
-						vertexIndices.push_back(vertexIndex[0]);
-						vertexIndices.push_back(vertexIndex[1]);
-						vertexIndices.push_back(vertexIndex[2]);
-
-						// Triangle 2: v0, v2, v3
-						vertexIndices.push_back(vertexIndex[0]);
-						vertexIndices.push_back(vertexIndex[2]);
-						vertexIndices.push_back(vertexIndex[3]);
-					}
-				}
-				else
-				{
-					printf("Face format not supported. Only triangles and quads are supported.\n");
-					return false;
+			
+			// Triangulate the polygon (fan triangulation from first vertex)
+			if (faceVertices.size() >= 3) {
+				for (size_t i = 1; i < faceVertices.size() - 1; ++i) {
+					// Triangle: v0, vi, vi+1
+					vertexIndices.push_back(faceVertices[0]);
+					vertexIndices.push_back(faceVertices[i]);
+					vertexIndices.push_back(faceVertices[i + 1]);
+					
+					uvIndices.push_back(faceUVs[0]);
+					uvIndices.push_back(faceUVs[i]);
+					uvIndices.push_back(faceUVs[i + 1]);
+					
+					normalIndices.push_back(faceNormals[0]);
+					normalIndices.push_back(faceNormals[i]);
+					normalIndices.push_back(faceNormals[i + 1]);
 				}
 			}
 		}

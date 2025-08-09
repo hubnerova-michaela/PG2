@@ -137,6 +137,12 @@ public:
         glm::mat3 normal_matrix = glm::mat3(glm::transpose(glm::inverse(model)));
         shader.setUniform("uNormal_m", normal_matrix);
 
+        // Set material properties
+        shader.setUniform("material.ambient", glm::vec3(ambient_material));
+        shader.setUniform("material.diffuse", glm::vec3(diffuse_material));
+        shader.setUniform("material.specular", glm::vec3(specular_material));
+        shader.setUniform("material.shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
+
         // Draw mesh
         glBindVertexArray(VAO);
         glDrawElements(primitive_type, static_cast<GLsizei>(indices.size()), GL_UNSIGNED_INT, 0);
@@ -153,6 +159,14 @@ public:
             return;
         }
 
+        // Debug mesh rendering details
+        static int debugCount = 0;
+        if (debugCount < 1) { // Only show first draw to confirm it works
+            std::cout << "DEBUG Mesh: VAO=" << VAO << ", vertices=" << vertices.size() 
+                      << ", indices=" << indices.size() << ", primitive=" << primitive_type << std::endl;
+            debugCount++;
+        }
+
         shader.activate();
 
         // Set model matrix uniform
@@ -161,6 +175,12 @@ public:
         // Calculate and set normal matrix (inverse transpose of model matrix)
         glm::mat3 normal_matrix = glm::mat3(glm::transpose(glm::inverse(model_matrix)));
         shader.setUniform("uNormal_m", normal_matrix);
+
+        // Set material properties
+        shader.setUniform("material.ambient", glm::vec3(ambient_material));
+        shader.setUniform("material.diffuse", glm::vec3(diffuse_material));
+        shader.setUniform("material.specular", glm::vec3(specular_material));
+        shader.setUniform("material.shininess", reflectivity * 32.0f); // Convert reflectivity to shininess
 
         // Draw mesh
         glBindVertexArray(VAO);
