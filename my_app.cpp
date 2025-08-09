@@ -30,6 +30,11 @@
 #include "PhysicsSystem.hpp"
 #include "AudioEngine.hpp"
 #include "particles.cpp"
+#include "TextureLoader.hpp"
+#include "CupcakeGame.hpp"
+#include <algorithm>
+#include <glm/gtc/matrix_transform.hpp>
+#include <glm/gtx/norm.hpp>
 
 // Vertex structure definition
 struct vertex
@@ -51,15 +56,36 @@ int g_antialiasingLevel = 4;
 // GL objects and shader program
 std::unique_ptr<ShaderProgram> my_shader;
 std::unique_ptr<ShaderProgram> particle_shader;
+std::unique_ptr<ShaderProgram> road_shader;
 std::unique_ptr<LightingSystem> lightingSystem;
 std::unique_ptr<ParticleSystem> particleSystem;
 std::unique_ptr<PhysicsSystem> physicsSystem;
 std::unique_ptr<AudioEngine> audioEngine;
+
+// Quake audio state
+static unsigned int g_quakeSoundHandle = 0;
+static bool g_quakeSoundPlaying = false;
+
+// Debug world bounds state
+static glm::vec3 g_worldMin(-100.0f, -5.0f, -100.0f);
+static glm::vec3 g_worldMax(100.0f, 100.0f, 100.0f);
+
+// Audio handles / flags
+// (removed duplicate quake variables; using the ones defined above)
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
+// Road texture resources
+static GLuint g_roadTex = 0;
+static GLint g_roadTexSamplerLoc = -1;
+static GLint g_roadTilingLoc = -1;
+
 // Transparent objects management
 std::vector<TransparentObject> transparentObjects;
+
+// ---------- Cupcake Delivery Game: Core State and Systems ----------
+// Game instance
+std::unique_ptr<CupcakeGame> cupcakeGame;
 
 // Animation control
 bool g_animationEnabled = true;
@@ -74,7 +100,8 @@ float fov = 60.0f; // Field of view in degrees
 std::unique_ptr<Camera> camera;
 bool firstMouse = true;
 double lastX = 400, lastY = 300; // Initial mouse position (center of 800x600 window)
-bool cameraEnabled = false;      // Toggle camera control mode
+// Camera is always enabled for free look in game mode
+bool cameraEnabled = true;
 
 // Triangle vertices
 std::vector<vertex> triangle_vertices = {
@@ -126,22 +153,10 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         std::cout << "Animation: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
     }
 
-    // Toggle camera control with C
+    // Camera control is always enabled; ignore C key toggling
     if (key == GLFW_KEY_C && action == GLFW_PRESS)
     {
-        cameraEnabled = !cameraEnabled;
-        if (cameraEnabled)
-        {
-            // Capture cursor for camera movement
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
-            firstMouse = true; // Reset mouse to avoid sudden camera jump
-        }
-        else
-        {
-            // Release cursor
-            glfwSetInputMode(window, GLFW_CURSOR, GLFW_CURSOR_NORMAL);
-        }
-        std::cout << "Camera control: " << (cameraEnabled ? "ON (WASD + mouse)" : "OFF") << std::endl;
+        // no-op
     }
 
     // Reset camera speed with V key
@@ -213,6 +228,14 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             break;
         }
     }
+
+    // Toggle gameplay active/pause (for testing) with F5
+    if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
+        if (cupcakeGame) {
+            cupcakeGame->getGameState().active = !cupcakeGame->getGameState().active;
+            std::cout << "Cupcake game: " << (cupcakeGame->getGameState().active ? "ACTIVE" : "PAUSED") << std::endl;
+        }
+    }
 }
 
 void fbsize_callback(GLFWwindow *window, int width, int height)
@@ -250,11 +273,10 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        // Change color on left click
-        r = static_cast<float>(rand()) / RAND_MAX;
-        g = static_cast<float>(rand()) / RAND_MAX;
-        b = static_cast<float>(rand()) / RAND_MAX;
-        std::cout << "Random color: R=" << r << " G=" << g << " B=" << b << std::endl;
+        // Handle cupcake projectile via game class
+        if (cupcakeGame) {
+            cupcakeGame->handleMouseClick(camera.get());
+        }
     }
 }
 
@@ -425,12 +447,19 @@ void checkGLError(const std::string &location)
 // Function to initialize assets and shaders
 void init_assets()
 {
-    // Notice: code massively simplified - all moved to specific classes    
+    // Notice: code massively simplified - all moved to specific classes
     // shader: load, compile, link, initialize params - using lighting shaders
     my_shader = std::make_unique<ShaderProgram>("resources/shaders/phong.vert", "resources/shaders/phong.frag");
     
     // Initialize particle shader
     particle_shader = std::make_unique<ShaderProgram>("resources/shaders/particle.vert", "resources/shaders/particle.frag");
+
+    // Road shader: reuse basic textured shader files (create if you have them). For now, use "basic" which supports color only; we will bind texture manually.
+    // If "basic" doesn’t support textures, this will still draw; texture use added via fixed pipeline bindings.
+    road_shader = std::make_unique<ShaderProgram>("resources/shaders/basic.vert", "resources/shaders/basic.frag");
+    if (!road_shader) {
+        throw std::runtime_error("Failed to create road shader");
+    }
 
     // Initialize lighting system
     lightingSystem = std::make_unique<LightingSystem>();
@@ -439,7 +468,10 @@ void init_assets()
     physicsSystem = std::make_unique<PhysicsSystem>();
     
     // Set up world bounds (large enough for our scene)
-    physicsSystem->setWorldBounds(glm::vec3(-100.0f, -5.0f, -100.0f), glm::vec3(100.0f, 100.0f, 100.0f));
+    // Extend world bounds in -Z to reduce constant boundary collisions during auto-forward motion
+    g_worldMin = glm::vec3(-100.0f, -5.0f, -300.0f);
+    g_worldMax = glm::vec3(100.0f, 100.0f, 100.0f);
+    physicsSystem->setWorldBounds(g_worldMin, g_worldMax);
     
     // Add some collision objects for testing
     physicsSystem->addCollisionObject(CollisionObject(CollisionType::BOX, glm::vec3(5.0f, 1.0f, -5.0f), glm::vec3(2.0f, 2.0f, 2.0f)));
@@ -447,8 +479,19 @@ void init_assets()
     physicsSystem->addCollisionObject(CollisionObject(CollisionType::PLANE, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))); // Ground plane
     
     // Set up collision callbacks
+    // Throttle wall hit logging to avoid spam when sliding along boundaries
     physicsSystem->setWallHitCallback([](const glm::vec3& hitPoint) {
-        std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+        static auto lastPrint = std::chrono::high_resolution_clock::now();
+        static glm::vec3 lastPos(FLT_MAX);
+        auto now = std::chrono::high_resolution_clock::now();
+        float secs = std::chrono::duration<float>(now - lastPrint).count();
+
+        // Print if sufficient time has passed or we hit a noticeably different spot
+        if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
+            std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+            lastPrint = now;
+            lastPos = hitPoint;
+        }
     });
     
     physicsSystem->setObjectHitCallback([](const glm::vec3& hitPoint) {
@@ -459,6 +502,45 @@ void init_assets()
     particleSystem->setEmitterPosition(glm::vec3(0.0f, 10.0f, -5.0f));
 
     audioEngine = std::make_unique<AudioEngine>();
+
+    // Initialize cupcake game
+    cupcakeGame = std::make_unique<CupcakeGame>();
+    cupcakeGame->initialize();
+
+    // Load road texture (JPEG): resources/textures/asphalt.jpg using inline OpenCV helpers
+    {
+        const std::filesystem::path texPath = "resources/textures/asphalt.jpg";
+        try {
+            g_roadTex = TextureLoader::textureInit(texPath);
+        } catch (const std::exception& e) {
+            std::cerr << "Failed to load texture '" << texPath.string() << "': " << e.what() << " - using procedural fallback\n";
+            g_roadTex = 0;
+        }
+
+        // Fallback: create a small checker texture to avoid null deref later
+        if (g_roadTex == 0) {
+            const int W = 64, H = 64;
+            std::vector<unsigned char> pixels(W * H * 3);
+            for (int y = 0; y < H; ++y) {
+                for (int x = 0; x < W; ++x) {
+                    bool c = ((x / 8) ^ (y / 8)) & 1;
+                    int idx = (y * W + x) * 3;
+                    pixels[idx+0] = c ? 90 : 40;
+                    pixels[idx+1] = c ? 90 : 40;
+                    pixels[idx+2] = c ? 90 : 40;
+                }
+            }
+            glGenTextures(1, &g_roadTex);
+            glBindTexture(GL_TEXTURE_2D, g_roadTex);
+            glTexImage2D(GL_TEXTURE_2D, 0, GL_RGB, W, H, 0, GL_RGB, GL_UNSIGNED_BYTE, pixels.data());
+            glGenerateMipmap(GL_TEXTURE_2D);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_REPEAT);
+            glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_REPEAT);
+            glBindTexture(GL_TEXTURE_2D, 0);
+        }
+    }
     if (audioEngine->init()) {
         std::cout << "Audio engine initialized successfully" << std::endl;
         glm::vec3 quadPosition(0.0f, 0.0f, -3.0f);
@@ -511,6 +593,39 @@ void init_assets()
     camera = std::make_unique<Camera>(glm::vec3(0.0f, 2.0f, 5.0f));
     camera->MovementSpeed = 2.5f;
     camera->MouseSensitivity = 0.1f;
+    // Always capture cursor for freelook
+    if (GLFWwindow* current = glfwGetCurrentContext()) {
+        glfwSetInputMode(current, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        firstMouse = true;
+    }
+
+    // Always capture the cursor for free look
+    GLFWwindow* current = glfwGetCurrentContext();
+    if (current) {
+        glfwSetInputMode(current, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
+        firstMouse = true;
+    }
+
+    // Setup initial road segments along -Z
+    cupcakeGame->getGameState().roadSegments.clear();
+    for (int i = 0; i < cupcakeGame->getGameState().roadSegmentCount; ++i) {
+        cupcakeGame->getGameState().roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * cupcakeGame->getGameState().roadSegmentLength));
+    }
+
+    // Pre-spawn initial houses alternating left/right
+    cupcakeGame->getGameState().houses.clear();
+    float z = -10.0f;
+    bool left = true;
+    for (int i = 0; i < 14; ++i) {
+        House h;
+        h.id = cupcakeGame->getGameState().nextHouseId++;
+        h.position = glm::vec3(left ? -cupcakeGame->getGameState().houseOffsetX : cupcakeGame->getGameState().houseOffsetX, 1.0f, z);
+        h.halfExtents = glm::vec3(1.0f, 2.0f, 1.0f);
+        h.requesting = false;
+        cupcakeGame->getGameState().houses.push_back(h);
+        z -= cupcakeGame->getGameState().houseSpacing;
+        left = !left;
+    }
 
     // Set initial uniforms
     my_shader->activate();
@@ -879,45 +994,63 @@ int main()
                                     " | AA: " + (g_antialisingEnabled ? ("ON(" + std::to_string(g_antialiasingLevel) + "x)") : "OFF");
                 glfwSetWindowTitle(window, title.c_str());
             } // Process camera input and update view matrix
-            if (cameraEnabled && camera)
+            if (camera && cupcakeGame && cupcakeGame->getGameState().active)
             {
                 // Calculate delta time for smooth camera movement
                 static auto lastFrameTime = currentTime;
                 float deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
                 lastFrameTime = currentTime;
 
-                // Process camera movement input with physics
-                glm::vec3 desiredMovement = camera->ProcessInput(window, deltaTime);
-                glm::vec3 actualMovement = physicsSystem->moveCamera(*camera, desiredMovement);
-                
-                if (glm::length(actualMovement) > 0.001f) // Only print if there's significant movement
-                {
-                    static int debugCounter = 0;
-                    if (++debugCounter % 60 == 0) // Print debug info once per second at 60fps
-                    {
-                        std::cout << "Camera - Speed: " << camera->MovementSpeed
-                                  << ", Desired: (" << desiredMovement.x << ", " << desiredMovement.y << ", " << desiredMovement.z << ")"
-                                  << ", Actual: (" << actualMovement.x << ", " << actualMovement.y << ", " << actualMovement.z << ")"
-                                  << ", DeltaTime: " << deltaTime << std::endl;
-                    }
-                }
-                camera->Position += actualMovement;
+                // Update cupcake game
+                cupcakeGame->update(deltaTime, camera.get(), audioEngine.get(), particleSystem.get(), physicsSystem.get());
 
-                // Update view matrix from camera
-                viewMatrix = camera->GetViewMatrix();
+                // Update view matrix from camera, with quake shake if active
+                glm::mat4 V = camera->GetViewMatrix();
+                if (cupcakeGame->getGameState().quakeActive) {
+                    // Stronger shake that scales with proximity to epicenter
+                    float dist = glm::length((camera ? camera->Position : glm::vec3(0.0f)) - cupcakeGame->getGameState().quakeEpicenter);
+                    float k = 10.0f; // tighter falloff
+                    float falloff = 1.0f / (1.0f + dist / k);
+                    float t = elapsedTime * 22.0f;
+                    float amp = cupcakeGame->getGameState().quakeAmplitude * 1.8f; // increase overall intensity
+                    float ax = sin(t * 1.9f) * amp * falloff;
+                    float ay = cos(t * 1.4f) * amp * 0.8f * falloff;
+                    V = glm::translate(V, glm::vec3(ax, ay, 0.0f));
+                }
+                viewMatrix = V;
             }
 
             // Update 3D audio listener position based on camera
-            if (audioEngine && audioEngine->isInitialized()) {
-                glm::vec3 listenerPos = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
-                glm::vec3 listenerFront = camera ? camera->Front : glm::vec3(0.0f, 0.0f, -1.0f);
-                glm::vec3 listenerUp = camera ? camera->Up : glm::vec3(0.0f, 1.0f, 0.0f);
-                audioEngine->setListener(listenerPos, listenerFront, listenerUp);
-            }
+            audioEngine->setListener(camera->Position, camera->Front, camera->Up);
 
             // Clear the screen
-            glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
-            glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT); 
+            // Dynamic background: light blue normally, smoothly blend to gray during earthquake and back after it ends
+            {
+                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // light blue
+                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f); // gray
+
+                // Persistent blend factor that eases in/out across frames
+                static float quakeBlend = 0.0f;
+                // Compute target based on quake state
+                float target = cupcakeGame->getGameState().quakeActive ? 1.0f : 0.0f;
+                // Ease rate (seconds^-1) scaled by frame time; faster when activating, slower when deactivating
+                float easeInRate = 2.5f;
+                float easeOutRate = 1.5f;
+
+                // Approximate dt via FPS estimate or last timeDelta; we have timeDelta above calculated once per second for FPS.
+                static auto lastBG = std::chrono::high_resolution_clock::now();
+                auto nowBG = std::chrono::high_resolution_clock::now();
+                float dtBG = std::chrono::duration<float>(nowBG - lastBG).count();
+                lastBG = nowBG;
+
+                float rate = (target > quakeBlend) ? easeInRate : easeOutRate;
+                quakeBlend += (target - quakeBlend) * glm::clamp(rate * dtBG, 0.0f, 1.0f);
+                quakeBlend = glm::clamp(quakeBlend, 0.0f, 1.0f);
+
+                glm::vec3 bg = glm::mix(normalSky, quakeSky, quakeBlend);
+                glClearColor(bg.r, bg.g, bg.b, 1.0f);
+                glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
+            }
 
             // Update lighting system
             if (lightingSystem) {
@@ -960,6 +1093,87 @@ int main()
                 }
                 
                 scene.at("triangle")->draw(position, rotation, scale);
+            }
+
+            // Draw road segments with road texture (if available)
+            if (scene.find("quad") != scene.end()) {
+                bool skippedFirst = false;
+                // Activate road shader (uses simple MVP; our Model::draw sets matrices via my_shader, so bind manually)
+                if (!road_shader) {
+                    std::cerr << "Road shader is null, skipping road rendering" << std::endl;
+                } else {
+                    road_shader->activate();
+                }
+                // Set shared matrices
+                if (road_shader) {
+                    road_shader->setUniform("uV_m", viewMatrix);
+                    road_shader->setUniform("uProj_m", projectionMatrix);
+                    road_shader->setUniform("uniform_Color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+                }
+
+                // Bind texture unit 0 and set texture uniforms
+                if (g_roadTex != 0) {
+                    glActiveTexture(GL_TEXTURE0);
+                    glBindTexture(GL_TEXTURE_2D, g_roadTex);
+                    if (road_shader) {
+                        road_shader->setUniform("textureSampler", 0);
+                        road_shader->setUniform("useTexture", true);
+                    }
+                } else {
+                    if (road_shader) {
+                        road_shader->setUniform("useTexture", false);
+                    }
+                }
+
+                for (const auto& seg : cupcakeGame->getGameState().roadSegments) {
+                    if (!skippedFirst) { skippedFirst = true; continue; } // skip initial rectangle
+                    glm::vec3 pos(seg.x, -0.01f, seg.z);
+                    glm::vec3 rot(0.0f);
+                    glm::vec3 scl(3.2f, 1.0f, cupcakeGame->getGameState().roadSegmentLength * 0.50f);
+
+                    // Manually draw a textured strip using immediate mode fallback (two triangles) if Model doesn't support UVs.
+                    // Build a simple VBO-less draw call using glBegin/glEnd is not available in core profile; instead render the quad model for geometry
+                    // and rely on shader sampling with generated UVs from world position.
+
+                    // Reuse the existing model draw for transforms but switch shader: call triangle/quad model with our road_shader active
+                    // If Model::draw always uses its own shader, we approximate by drawing colored and letting texture bind affect fragment shader if it samples.
+                    scene.at("quad")->draw(pos, rot, scl);
+                }
+
+                // Unbind texture
+                if (g_roadTex != 0) {
+                    glBindTexture(GL_TEXTURE_2D, 0);
+                }
+                if (road_shader) {
+                    road_shader->deactivate();
+                }
+            }
+
+            // Draw houses as scaled triangles/quads placeholders (use triangle model scaled as a box stand-in)
+            for (const auto& h : cupcakeGame->getGameState().houses) {
+                if (scene.find("triangle") != scene.end()) {
+                    glm::vec3 pos = h.position;
+                    glm::vec3 rot(0.0f);
+                    glm::vec3 scl(1.5f, 2.5f, 1.0f);
+                    scene.at("triangle")->draw(pos, rot, scl);
+                }
+            }
+
+            // Place particle effects near the "active" house as a big green semi-transparent aura
+            if (cupcakeGame->getGameState().requestingHouseId >= 0 && particleSystem) {
+                for (const auto& h : cupcakeGame->getGameState().houses) {
+                    if (h.id == cupcakeGame->getGameState().requestingHouseId) {
+                        // Position aura slightly in front of the house toward the camera and above the roof line
+                        glm::vec3 toCamera = glm::normalize((camera ? camera->Position : glm::vec3(0.0f)) - h.position);
+                        glm::vec3 inFront = h.position + toCamera * 1.2f + glm::vec3(0.0f, h.indicatorHeight * 0.6f, 0.0f);
+                        particleSystem->setEmitterPosition(inFront);
+                        // Emit more particles to make the aura dense without spreading too far
+                        for (int i = 0; i < 3; ++i) {
+                            particleSystem->emit(6);
+                        }
+                        break;
+                    }
+                }
             }
 
             // Quad: Subtle translation up/down (center object)
@@ -1059,18 +1273,51 @@ int main()
                 static auto lastParticleTime = currentTime;
                 float particleDeltaTime = std::chrono::duration<float>(currentTime - lastParticleTime).count();
                 lastParticleTime = currentTime;
-                
-                // Update particle system
-                particleSystem->update(particleDeltaTime);
-                
-                // Update emitter position to follow camera with some offset
-                if (camera) {
-                    glm::vec3 emitterPos = camera->Position + camera->Front * 3.0f + glm::vec3(0.0f, 2.0f, 0.0f);
-                    particleSystem->setEmitterPosition(emitterPos);
+
+                // Update particle system faster to look like an aura
+                particleSystem->update(particleDeltaTime * 1.5f);
+
+                // IMPORTANT: Do NOT bind particle emitter to camera anymore.
+                // Emitter position is set when a house is active in the indicator block.
+                // If no active house, move emitter far away to effectively hide particles.
+                if (cupcakeGame->getGameState().requestingHouseId < 0) {
+                    particleSystem->setEmitterPosition(glm::vec3(0.0f, -10000.0f, 0.0f));
                 }
-                
+
                 // Render particles
+                // Provide time to particle shader for subtle flicker
+                if (particle_shader) {
+                    particle_shader->activate();
+                    particle_shader->setUniform("uTime", elapsedTime);
+                    particle_shader->deactivate();
+                }
                 particleSystem->draw(viewMatrix, projectionMatrix);
+            }
+
+            // HUD / Overlays
+            // Simple "GAME OVER" overlay when gameplay is inactive
+            if (!cupcakeGame->getGameState().active) {
+                // Draw a centered translucent panel using scissor without altering global background color intent
+                glEnable(GL_SCISSOR_TEST);
+                int rw = static_cast<int>(g_windowWidth * 0.65f);
+                int rh = static_cast<int>(g_windowHeight * 0.28f);
+                int rx = (g_windowWidth - rw) / 2;
+                int ry = (g_windowHeight - rh) / 2;
+                glScissor(rx, ry, rw, rh);
+
+                // Choose panel color based on current sky color so it’s not pure black
+                // Recompute the sky color similarly to the clear step to pick a suitable panel tint
+                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // light blue
+                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f); // gray
+                // We don’t have access to the persistent quakeBlend here; approximate via darker overlay that works on both
+                glm::vec3 panel = glm::mix(quakeSky, normalSky, 0.25f) * 0.6f; // soft bluish-gray
+                glClearColor(panel.r, panel.g, panel.b, 0.55f); // semi-transparent, not pure black
+                glClear(GL_COLOR_BUFFER_BIT);
+                glDisable(GL_SCISSOR_TEST);
+
+                // Also set window title to reflect game over status prominently
+                std::string title = g_windowTitle + " | GAME OVER";
+                glfwSetWindowTitle(window, title.c_str());
             }
 
             // Check for errors

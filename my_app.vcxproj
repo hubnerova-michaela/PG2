@@ -157,6 +157,8 @@
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="my_app.cpp" />
     <ClCompile Include="transform.cpp" />
+    <ClCompile Include="TextureLoader.cpp" />
+    <ClCompile Include="CupcakeGame.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app_settings.json" />
@@ -178,6 +180,8 @@
     <ClInclude Include="PhysicsSystem.hpp" />
     <ClInclude Include="ShaderProgram.hpp" />
     <ClInclude Include="teapot_vec.hpp" />
+    <ClInclude Include="CupcakeGame.hpp" />
+    <ClInclude Include="TextureLoader.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">
