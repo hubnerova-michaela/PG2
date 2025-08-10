@@ -1,3 +1,4 @@
+#define GLM_ENABLE_EXPERIMENTAL
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -12,7 +13,6 @@
 #include <GLFW/glfw3.h>
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
-#define GLM_ENABLE_EXPERIMENTAL
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <nlohmann/json.hpp>
@@ -95,6 +95,7 @@ void cleanupRoadGeometry() {
 }
 
 void saveSettings();
+void checkGLError(const std::string &location);
 
 bool g_vSync = true;
 std::string g_windowTitle = "Cupcagame";
@@ -1079,51 +1080,51 @@ int main()
             const float cullingDistance = 120.0f; // render houses within range
             
             for (const auto& h : cupcakeGame->getGameState().houses) {
-                if (std::abs(h.position.z - cameraZ) > cullingDistance) {
-                    continue;
-                }
-                
-                std::string modelName = h.modelName;
-                if (modelName.empty()) {
-                    modelName = "house";
-                }
-                
-                if (scene.find(modelName) != scene.end()) {
-                    glm::vec3 pos = h.position;
-                    glm::vec3 rot(0.0f, h.id * 23.0f * (3.14159f / 180.0f), 0.0f);
-                    
-                    glm::vec3 scl;
-                    if (modelName == "bambo_house") {
-                        scl = glm::vec3(0.35f, 0.35f, 0.35f);
-                    } else if (modelName == "cyprys_house") {
-                        scl = glm::vec3(0.4f, 0.4f, 0.4f);
-                    } else if (modelName == "building") {
-                        scl = glm::vec3(0.25f, 0.25f, 0.25f);
-                    } else { // house.obj
-                        scl = glm::vec3(0.018f, 0.018f, 0.018f);
-                    }
-                    
-                    scene.at(modelName)->draw(pos, rot, scl);
-                }
+            if (std::abs(h.position.z - cameraZ) > cullingDistance) {
+                continue;
+            }
             
-                if (h.requesting) {
-                    if (scene.find("cupcake") != scene.end()) {
-                        glm::vec3 indicatorPos = h.position;
-                        indicatorPos.y += h.indicatorHeight;
-                        glm::vec3 rot(0.0f, elapsedTime * 60.0f, 0.0f);
-                        glm::vec3 scl(0.12f, 0.12f, 0.12f);
-                        scene.at("cupcake")->draw(indicatorPos, rot, scl);
-                    }
+            std::string modelName = h.modelName;
+            if (modelName.empty()) {
+                modelName = "house";
+            }
+            
+            if (scene.find(modelName) != scene.end()) {
+                glm::vec3 pos = h.position;
+                glm::vec3 rot(0.0f, h.id * 23.0f * (3.14159f / 180.0f), 0.0f);
+                
+                glm::vec3 scl;
+                if (modelName == "bambo_house") {
+                    scl = glm::vec3(0.35f, 0.35f, 0.35f);
+                } else if (modelName == "cyprys_house") {
+                    scl = glm::vec3(0.4f, 0.4f, 0.4f);
+                } else if (modelName == "building") {
+                    scl = glm::vec3(0.25f, 0.25f, 0.25f);
+                } else { // house.obj
+                    scl = glm::vec3(0.018f, 0.018f, 0.018f);
+                }
+                
+                scene.at(modelName)->draw(pos, rot, scl);
+            }
+        
+            if (h.requesting) {
+                if (scene.find("cupcake") != scene.end()) {
+                    glm::vec3 indicatorPos = h.position;
+                    indicatorPos.y += h.indicatorHeight;
+                    glm::vec3 rot(0.0f, elapsedTime * 60.0f, 0.0f);
+                    glm::vec3 scl(0.12f, 0.12f, 0.12f);
+                    scene.at("cupcake")->draw(indicatorPos, rot, scl);
                 }
             }
+        }
 
-            if (scene.find("cupcake") != scene.end()) {
-                for (const auto& projectile : cupcakeGame->getGameState().projectiles) {
-                    if (projectile && projectile->alive) {
-                        projectile->draw(scene.at("cupcake").get());
-                    }
+        if (scene.find("cupcake") != scene.end()) {
+            for (const auto& projectile : cupcakeGame->getGameState().projectiles) {
+                if (projectile && projectile->alive) {
+                    projectile->draw(scene.at("cupcake").get());
                 }
             }
+        }
 
             // Place particle effects near the "active" house as a big green semi-transparent aura
             if (cupcakeGame->getGameState().requestingHouseId >= 0 && particleSystem) {
@@ -1157,7 +1158,7 @@ int main()
             }
 
             // render sun
-            if (scene.find("cupcake") != scene.end() && lightingSystem)
+            if (scene.find("sphere") != scene.end() && lightingSystem)
             {
                 glm::vec3 sunDirection = -lightingSystem->dirLight.direction;
                 
@@ -1172,7 +1173,7 @@ int main()
                 
                 my_shader->setUniform("material.emission", glm::vec3(2.0f, 1.5f, 0.5f)); // Bright yellow-orange emission
                 
-                scene.at("cupcake")->draw(sunPosition, sunRotation, sunScale);
+                scene.at("sphere")->draw(sunPosition, sunRotation, sunScale);
                 
                 my_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
             }

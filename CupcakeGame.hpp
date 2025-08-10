@@ -14,6 +14,11 @@ class AudioEngine;
 class ParticleSystem;
 class PhysicsSystem;
 
+// Forward declare sol::state to avoid including Sol2 in header
+namespace sol {
+    class state;
+}
+
 // Defines a single house in the game world
 struct House {
     int id = -1;
@@ -22,6 +27,8 @@ struct House {
     glm::vec3 halfExtents{1.0f};
     float indicatorHeight = 7.0f;
     bool requesting = false;
+    bool delivered = false;
+    float deliveryEffectTimer = 0.0f;
 };
 
 // Holds all the dynamic data for the game
@@ -97,4 +104,8 @@ private:
     // Sound handles
     unsigned int quakeSoundHandle = 0;
     bool quakeSoundPlaying = false;
+    
+    // Lua scripting - use forward declaration to avoid header dependency
+    std::unique_ptr<sol::state> lua;
+    PhysicsSystem* cachedPhysicsSystem;
 };
