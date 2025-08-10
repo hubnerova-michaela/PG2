@@ -139,6 +139,7 @@ float fov = 60.0f;
 std::unique_ptr<Camera> camera;
 bool firstMouse = true;
 double lastX = 400, lastY = 300;
+bool g_bikeSteeringMode = true; // Enable bike steering by default
 
 void error_callback(int error, const char *description)
 {
@@ -200,6 +201,13 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             std::cout << "Cupcake game: " << (cupcakeGame->getGameState().active ? "ACTIVE" : "PAUSED") << std::endl;
         }
     }
+    
+    // Toggle bike steering mode with B key
+    if (key == GLFW_KEY_B && action == GLFW_PRESS) {
+        g_bikeSteeringMode = !g_bikeSteeringMode;
+        std::cout << "Bike steering mode: " << (g_bikeSteeringMode ? "ON" : "OFF") << std::endl;
+        std::cout << "Move mouse left/right to steer the bike" << std::endl;
+    }
 }
 
 void fbsize_callback(GLFWwindow *window, int width, int height)
@@ -259,7 +267,25 @@ void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
     lastX = xpos;
     lastY = ypos;
 
+    // Handle camera look direction (unchanged)
     camera->ProcessMouseMovement(static_cast<GLfloat>(xoffset), static_cast<GLfloat>(yoffset));
+    
+    // Add lateral movement for "bike steering"
+    if (cupcakeGame && cupcakeGame->getGameState().active) {
+        const float steeringSensitivity = 0.01f; // Adjust this value to change steering responsiveness
+        const float maxSteeringSpeed = 15.0f;    // Maximum lateral movement speed
+        
+        // Calculate lateral movement based on horizontal mouse movement
+        float lateralMovement = static_cast<float>(xoffset) * steeringSensitivity;
+        lateralMovement = glm::clamp(lateralMovement, -maxSteeringSpeed, maxSteeringSpeed);
+        
+        // Apply the movement to the camera's right direction (X-axis)
+        glm::vec3 rightVector = camera->Right;
+        glm::vec3 movement = rightVector * lateralMovement;
+        
+        // Apply the movement (this will be processed by physics system if available)
+        camera->Position += movement;
+    }
 }
 
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)

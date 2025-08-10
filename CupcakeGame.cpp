@@ -42,20 +42,47 @@ CupcakeGame::CupcakeGame()
         // This is the bridge from Lua back into our C++ engine.
         // It takes a Lua table as an argument, which we parse into house properties.
         lua->set_function("add_house", [&](sol::table args) {
-            House house;
-            house.id = gameState.nextHouseId++;
-            house.modelName = args["model"];
-            house.position = args["position"]; // Sol2 automatically converts the Lua table to a vec3
+            std::cout << "add_house called from Lua" << std::endl;
+            
+            try {
+                House house;
+                house.id = gameState.nextHouseId++;
+                
+                // Extract model name
+                sol::object modelObj = args["model"];
+                if (modelObj.is<std::string>()) {
+                    house.modelName = modelObj.as<std::string>();
+                    std::cout << "Model name: " << house.modelName << std::endl;
+                } else {
+                    std::cerr << "ERROR: Model name is not a string!" << std::endl;
+                    return;
+                }
+                
+                // Extract position
+                sol::object posObj = args["position"];
+                if (posObj.is<glm::vec3>()) {
+                    house.position = posObj.as<glm::vec3>();
+                    std::cout << "Position (vec3): (" << house.position.x << ", " << house.position.y << ", " << house.position.z << ")" << std::endl;
+                } else {
+                    std::cerr << "ERROR: Position is not a vec3!" << std::endl;
+                    std::cerr << "Position type ID: " << static_cast<int>(posObj.get_type()) << std::endl;
+                    return;
+                }
 
-            // Get properties based on the model name
-            house.halfExtents = getHouseExtents(house.modelName);
-            house.indicatorHeight = getIndicatorHeight(house.modelName);
-            
-            gameState.houses.push_back(house);
-            
-            // If the physics system is available, add a collision object for the new house.
-            if (this->cachedPhysicsSystem) {
-                 this->cachedPhysicsSystem->addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+                // Get properties based on the model name
+                house.halfExtents = getHouseExtents(house.modelName);
+                house.indicatorHeight = getIndicatorHeight(house.modelName);
+                
+                gameState.houses.push_back(house);
+                std::cout << "House added successfully. Total houses: " << gameState.houses.size() << std::endl;
+                
+                // If the physics system is available, add a collision object for the new house.
+                if (this->cachedPhysicsSystem) {
+                     this->cachedPhysicsSystem->addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+                     std::cout << "Collision object added for house" << std::endl;
+                }
+            } catch (const std::exception& e) {
+                std::cerr << "ERROR in add_house: " << e.what() << std::endl;
             }
         });
 
@@ -183,13 +210,61 @@ void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
 }
 
 void CupcakeGame::spawnNewHouses(float zPosition, PhysicsSystem* physicsSystem) {
+    std::cout << "spawnNewHouses called with zPosition: " << zPosition << std::endl;
+    
+    // For debugging - let's always use C++ fallback for now
+    std::cout << "Using C++ fallback for house generation." << std::endl;
+    const float houseOffsetX = 10.0f; // Match the Lua script's house_side_offset
+    const float emptyPlotProbability = 0.2f;
+    
+    // Left side of the road
+    if (unirand(rng) > emptyPlotProbability) {
+        House house;
+        house.id = gameState.nextHouseId++;
+        house.modelName = getRandomHouseModel();
+        house.position = glm::vec3(-houseOffsetX, 0.0f, zPosition);
+        house.halfExtents = getHouseExtents(house.modelName);
+        house.indicatorHeight = getIndicatorHeight(house.modelName);
+        
+        gameState.houses.push_back(house);
+        std::cout << "C++ Left house added: " << house.modelName << " at (" 
+                  << house.position.x << ", " << house.position.y << ", " << house.position.z 
+                  << "). Total houses: " << gameState.houses.size() << std::endl;
+        
+        if (physicsSystem) {
+            physicsSystem->addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+        }
+    }
+    
+    // Right side of the road
+    if (unirand(rng) > emptyPlotProbability) {
+        House house;
+        house.id = gameState.nextHouseId++;
+        house.modelName = getRandomHouseModel();
+        house.position = glm::vec3(houseOffsetX, 0.0f, zPosition);
+        house.halfExtents = getHouseExtents(house.modelName);
+        house.indicatorHeight = getIndicatorHeight(house.modelName);
+        
+        gameState.houses.push_back(house);
+        std::cout << "C++ Right house added: " << house.modelName << " at (" 
+                  << house.position.x << ", " << house.position.y << ", " << house.position.z 
+                  << "). Total houses: " << gameState.houses.size() << std::endl;
+        
+        if (physicsSystem) {
+            physicsSystem->addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+        }
+    }
+    
+    /*
     // Try to use Lua script first if available
     if (lua) {
         try {
             sol::function generate_func = (*lua)["generate_houses_at_z"];
             if (generate_func.valid()) {
+                std::cout << "Calling Lua generate_houses_at_z function..." << std::endl;
                 // Execute the Lua function, passing the Z position.
                 generate_func(zPosition); 
+                std::cout << "Lua function executed. Current house count: " << gameState.houses.size() << std::endl;
                 return; // Success, exit early
             } else {
                 std::cerr << "LUA SCRIPTING ERROR: Could not find function 'generate_houses_at_z' in script." << std::endl;
@@ -235,6 +310,7 @@ void CupcakeGame::spawnNewHouses(float zPosition, PhysicsSystem* physicsSystem) 
             physicsSystem->addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
         }
     }
+    */
 }
 
 void CupcakeGame::handleMouseClick(Camera* camera) {
