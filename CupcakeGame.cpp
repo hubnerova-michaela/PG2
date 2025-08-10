@@ -8,33 +8,27 @@
 #include <algorithm>
 
 CupcakeGame::CupcakeGame() {
-    // Initialize the house generator
     houseGenerator = std::make_unique<HouseGenerator>();
 }
 
 CupcakeGame::~CupcakeGame() {
-    // Destructor - cleanup any game-specific resources
 }
 
 void CupcakeGame::initialize() {
-    // Setup initial road segments along -Z
     gameState.roadSegments.clear();
     for (int i = 0; i < gameState.roadSegmentCount; ++i) {
         gameState.roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * gameState.roadSegmentLength));
     }
 
-    // Pre-spawn initial houses using the house generator
     gameState.houses.clear();
-    float z = -15.0f; // Start houses a bit further ahead
+    float z = -15.0f;
     
-    // Generate initial rows of houses (20 rows to start)
     for (int i = 0; i < 20; ++i) {
         std::vector<House> newHouses = houseGenerator->generateHouseRow(
             z, gameState.nextHouseId, gameState.houseOffsetX, 
-            gameState.requestingHouseId < 0 // Can make active if no current request
+            gameState.requestingHouseId < 0
         );
         
-        // Add houses to game state
         for (auto& house : newHouses) {
             if (house.requesting) {
                 gameState.requestingHouseId = house.id;
@@ -52,12 +46,10 @@ void CupcakeGame::initialize() {
 void CupcakeGame::handleMouseClick(Camera* camera) {
     if (!camera) return;
     
-    // Create projectile position and velocity
     glm::vec3 pos = camera->Position + camera->Front * 2.5f + glm::vec3(0.0f, -0.1f, 0.0f); // spawn 2.5 units ahead
     glm::vec3 forward = glm::normalize(glm::vec3(camera->Front.x, camera->Front.y + 0.1f, camera->Front.z)); // slight upward bias for arc
     glm::vec3 vel = forward * 16.0f; // increased throw speed
     
-    // Create new projectile using the Projectile class
     auto projectile = std::make_unique<Projectile>(pos, vel, 0.2f);
     gameState.projectiles.push_back(std::move(projectile));
     
@@ -78,7 +70,6 @@ void CupcakeGame::update(float deltaTime, Camera* camera, AudioEngine* audioEngi
 void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem* physicsSystem) {
     if (!camera || !gameState.active) return;
 
-    // Auto-forward bike movement along camera forward projected to XZ
     glm::vec3 fwd = camera->Front;
     glm::vec3 fwdXZ = glm::normalize(glm::vec3(fwd.x, 0.0f, fwd.z));
     glm::vec3 desiredMovement = fwdXZ * gameState.speed * deltaTime;
@@ -87,21 +78,18 @@ void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem*
         glm::vec3 actualMovement = physicsSystem->moveCamera(*camera, desiredMovement);
         camera->Position += actualMovement;
         
-        // Keep camera reasonably close to the ground for better gameplay
         if (camera->Position.y < 1.5f) {
             camera->Position.y = 1.5f;
         } else if (camera->Position.y > 4.0f) {
             camera->Position.y = 4.0f;
         }
         
-        // Keep camera roughly centered on the road
         if (std::abs(camera->Position.x) > gameState.houseOffsetX - 2.0f) {
             float sign = camera->Position.x > 0.0f ? 1.0f : -1.0f;
             camera->Position.x = sign * (gameState.houseOffsetX - 2.0f);
         }
     }
 
-    // Pacing: increase speed slightly over time
     gameState.pacingTimer += deltaTime;
     if (gameState.pacingTimer >= gameState.pacingStep) {
         gameState.pacingTimer = 0.0f;
@@ -114,15 +102,12 @@ void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem*
 void CupcakeGame::updateRequests(float deltaTime, Camera* camera) {
     if (!camera) return;
 
-    // Request spawning and timeout
     if (gameState.requestingHouseId < 0) {
         gameState.requestTimer += deltaTime;
         if (gameState.requestTimer >= gameState.requestInterval && !gameState.houses.empty()) {
-            // Pick a house ahead of camera within reasonable range
             int pick = -1;
             for (size_t i = 0; i < gameState.houses.size(); ++i) {
                 const auto& h = gameState.houses[i];
-                // Look for houses ahead of camera within delivery range
                 if (h.position.z < camera->Position.z - 5.0f && h.position.z > camera->Position.z - 80.0f) {
                     pick = static_cast<int>(i);
                     break;
@@ -145,7 +130,6 @@ void CupcakeGame::updateRequests(float deltaTime, Camera* camera) {
             gameState.happiness = glm::max(0, gameState.happiness - 8);
             std::cout << "Missed delivery! Happiness: " << gameState.happiness << std::endl;
             
-            // Clear request
             for (auto& h : gameState.houses) {
                 if (h.id == gameState.requestingHouseId) { 
                     h.requesting = false; 
@@ -167,7 +151,6 @@ void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine*
             gameState.quakeTimeLeft = gameState.quakeDuration;
             gameState.quakeTimer = 0.0f;
             
-            // Start quake sound loop if available
             if (audioEngine && audioEngine->isInitialized() && !quakeSoundPlaying && camera) {
                 glm::vec3 fwdXZ = glm::normalize(glm::vec3(camera->Front.x, 0.0f, camera->Front.z));
                 float dist = 8.0f + 22.0f * gameState.unirand(gameState.rng); // 8..30m
@@ -176,7 +159,6 @@ void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine*
                 gameState.quakeEpicenter = camera->Position + fwdXZ * dist + right * side;
                 gameState.quakeEpicenter.y = 0.0f;
                 
-                // Try to start quake sound
                 quakeSoundHandle = audioEngine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", gameState.quakeEpicenter);
                 if (quakeSoundHandle != 0) {
                     quakeSoundPlaying = true;
@@ -184,7 +166,6 @@ void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine*
             }
         }
     } else {
-        // Update quake sound position
         if (audioEngine && audioEngine->isInitialized() && quakeSoundPlaying && quakeSoundHandle != 0) {
             audioEngine->setSoundPosition(quakeSoundHandle, gameState.quakeEpicenter);
         }
@@ -193,7 +174,6 @@ void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine*
         if (gameState.quakeTimeLeft <= 0.0f) {
             gameState.quakeActive = false;
             gameState.quakeTimeLeft = 0.0f;
-            // Stop quake loop sound
             if (audioEngine && quakeSoundPlaying && quakeSoundHandle != 0) {
                 audioEngine->stopSound(quakeSoundHandle);
                 quakeSoundHandle = 0;
@@ -207,19 +187,16 @@ void CupcakeGame::updateProjectiles(float deltaTime) {
     for (auto& p : gameState.projectiles) {
         if (!p || !p->alive) continue;
         
-        // Update projectile physics
         p->update(deltaTime);
 
-        // Hit test vs houses (AABB)
         for (auto& h : gameState.houses) {
             glm::vec3 minB = h.position - h.halfExtents;
             glm::vec3 maxB = h.position + h.halfExtents;
             glm::vec3 c = glm::clamp(p->position, minB, maxB);
             float d2 = glm::dot(p->position - c, p->position - c);
             if (d2 <= p->radius * p->radius) {
-                // Resolve outcome
                 if (h.requesting) {
-                    gameState.money += 8; // Increased reward
+                    gameState.money += 8;
                     gameState.happiness = glm::min(100, gameState.happiness + 5);
                     h.requesting = false;
                     gameState.requestingHouseId = -1;
@@ -238,7 +215,6 @@ void CupcakeGame::updateProjectiles(float deltaTime) {
         }
     }
     
-    // Remove dead projectiles
     gameState.projectiles.erase(
         std::remove_if(gameState.projectiles.begin(), gameState.projectiles.end(),
             [](const std::unique_ptr<Projectile>& pr){ return !pr || !pr->alive; }),
@@ -249,24 +225,20 @@ void CupcakeGame::updateProjectiles(float deltaTime) {
 void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
     if (!camera) return;
 
-    // Recycle road segments when behind camera
     for (auto& seg : gameState.roadSegments) {
         if (seg.z > camera->Position.z + gameState.roadSegmentLength) {
-            // move far ahead
             float minZ = seg.z;
             for (auto& s2 : gameState.roadSegments) minZ = std::min(minZ, s2.z);
             seg.z = minZ - gameState.roadSegmentLength;
         }
     }
 
-    // Cull far behind houses
     gameState.houses.erase(
         std::remove_if(gameState.houses.begin(), gameState.houses.end(),
             [&](const House& h){ return h.position.z > camera->Position.z + 5.0f; }),
         gameState.houses.end()
     );
 
-    // House collision -> Game Over
     if (gameState.active) {
         glm::vec3 camPos = camera->Position;
         float camRadius = 0.5f;
@@ -290,23 +262,19 @@ void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
 void CupcakeGame::spawnHouses(Camera* camera, PhysicsSystem* physicsSystem) {
     if (!camera) return;
 
-    // Determine farthest Z of existing houses; generate forward to maintain coverage ahead
     float farthestZ = camera->Position.z;
     for (const auto& h : gameState.houses) {
         farthestZ = std::min(farthestZ, h.position.z);
     }
 
-    // Generate new house rows to maintain ~200 units ahead of camera
     while (camera->Position.z - farthestZ < 200.0f) {
         farthestZ -= gameState.houseSpacing;
         
-        // Generate a new row of houses
         std::vector<House> newHouses = houseGenerator->generateHouseRow(
             farthestZ, gameState.nextHouseId, gameState.houseOffsetX,
-            gameState.requestingHouseId < 0 // Can make active if no current request
+            gameState.requestingHouseId < 0
         );
         
-        // Add new houses to the game state
         for (auto& house : newHouses) {
             if (house.requesting && gameState.requestingHouseId < 0) {
                 gameState.requestingHouseId = house.id;
@@ -316,7 +284,6 @@ void CupcakeGame::spawnHouses(Camera* camera, PhysicsSystem* physicsSystem) {
             gameState.houses.push_back(house);
         }
         
-        // Add collision objects for new houses to physics system
         if (physicsSystem) {
             for (const auto& house : newHouses) {
                 physicsSystem->addCollisionObject(CollisionObject(

@@ -12,6 +12,7 @@ struct Material {
     vec3 diffuse;
     vec3 specular;
     float shininess;
+    vec3 emission;
 };
 
 // Directional light (sun)
@@ -67,6 +68,7 @@ uniform vec3 material_ambient;
 uniform vec3 material_diffuse;
 uniform vec3 material_specular;
 uniform float material_shininess;
+uniform vec3 material_emission;
 
 // Function prototypes
 vec3 CalcDirLight(DirLight light, Material material, vec3 normal, vec3 viewDir);
@@ -81,6 +83,7 @@ void main()
     material.diffuse = material_diffuse;
     material.specular = material_specular;
     material.shininess = material_shininess;
+    material.emission = material_emission;
     
     // Properties
     vec3 norm = normalize(Normal);
@@ -101,6 +104,9 @@ void main()
         vec4 texColor = texture(material_diffuseTex, TexCoords);
         result *= texColor.rgb;
     }
+    
+    // Add emission (self-illumination)
+    result += material.emission;
     
     FragColor = vec4(result, 1.0);
 }

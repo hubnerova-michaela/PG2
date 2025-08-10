@@ -1,7 +1,3 @@
-//
-// myapp.cpp: library demonstrator
-//
-
 #include <iostream>
 #include <fstream>
 #include <filesystem>
@@ -20,6 +16,9 @@
 #include <glm/gtx/string_cast.hpp>
 #include <glm/gtc/type_ptr.hpp>
 #include <nlohmann/json.hpp>
+#include <imgui.h>
+#include <imgui_impl_glfw.h>
+#include <imgui_impl_opengl3.h>
 
 #include "ShaderProgram.hpp"
 #include "Model.hpp"
@@ -37,22 +36,17 @@
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
 
-// Vertex structure definition
 struct vertex
 {
     glm::vec3 position;
 };
 
-// Road rendering globals
 static GLuint g_roadVAO = 0;
 static GLuint g_roadVBO = 0;
 static GLuint g_roadEBO = 0;
 
-// Function to initialize road geometry
 void initRoadGeometry() {
-    // Create a wider quad for road segments - spans the full width between houses
     float roadVertices[] = {
-        // positions        // texture coords
         -1.0f, 0.0f, -1.0f,  0.0f, 0.0f,  // bottom left
          1.0f, 0.0f, -1.0f,  2.0f, 0.0f,  // bottom right (increased U coord for tiling)
          1.0f, 0.0f,  1.0f,  2.0f, 2.0f,  // top right
@@ -76,18 +70,15 @@ void initRoadGeometry() {
     glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_roadEBO);
     glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(roadIndices), roadIndices, GL_STATIC_DRAW);
     
-    // Position attribute
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)0);
     glEnableVertexAttribArray(0);
     
-    // Texture coordinate attribute
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void*)(3 * sizeof(float)));
     glEnableVertexAttribArray(2);
     
     glBindVertexArray(0);
 }
 
-// Function to cleanup road geometry
 void cleanupRoadGeometry() {
     if (g_roadVAO != 0) {
         glDeleteVertexArrays(1, &g_roadVAO);
@@ -103,18 +94,15 @@ void cleanupRoadGeometry() {
     }
 }
 
-// Forward declarations
 void saveSettings();
 
-// Global variables
 bool g_vSync = true;
-std::string g_windowTitle = "Graphics Application";
+std::string g_windowTitle = "Cupcagame";
 int g_windowWidth = 800;
 int g_windowHeight = 600;
 bool g_antialisingEnabled = false;
 int g_antialiasingLevel = 4;
 
-// GL objects and shader program
 std::unique_ptr<ShaderProgram> my_shader;
 std::unique_ptr<ShaderProgram> particle_shader;
 std::unique_ptr<ShaderProgram> road_shader;
@@ -123,54 +111,34 @@ std::unique_ptr<ParticleSystem> particleSystem;
 std::unique_ptr<PhysicsSystem> physicsSystem;
 std::unique_ptr<AudioEngine> audioEngine;
 
-// Quake audio state
 static unsigned int g_quakeSoundHandle = 0;
 static bool g_quakeSoundPlaying = false;
+static unsigned int g_triangleSoundHandle = 0;
 
-// Debug world bounds state
 static glm::vec3 g_worldMin(-100.0f, -5.0f, -100.0f);
 static glm::vec3 g_worldMax(100.0f, 100.0f, 100.0f);
 
-// Audio handles / flags
-// (removed duplicate quake variables; using the ones defined above)
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
 
-// Road texture resources
 static GLuint g_roadTex = 0;
 static GLint g_roadTexSamplerLoc = -1;
 static GLint g_roadTilingLoc = -1;
 
-// Transparent objects management
 std::vector<TransparentObject> transparentObjects;
 
-// ---------- Cupcake Delivery Game: Core State and Systems ----------
-// Game instance
 std::unique_ptr<CupcakeGame> cupcakeGame;
 
-// Animation control
 bool g_animationEnabled = true;
-unsigned int g_triangleSoundHandle = 0; // Handle for triangle audio
 
-// Transformation matrices
 glm::mat4 projectionMatrix{1.0f};
 glm::mat4 viewMatrix{1.0f};
-float fov = 60.0f; // Field of view in degrees
+float fov = 60.0f;
 
-// Camera system
 std::unique_ptr<Camera> camera;
 bool firstMouse = true;
-double lastX = 400, lastY = 300; // Initial mouse position (center of 800x600 window)
-// Camera is always enabled for free look in game mode
-bool cameraEnabled = true;
+double lastX = 400, lastY = 300;
 
-// Triangle vertices
-std::vector<vertex> triangle_vertices = {
-    {{0.0f, 0.5f, 0.0f}},
-    {{0.5f, -0.5f, 0.0f}},
-    {{-0.5f, -0.5f, 0.0f}}};
-
-// Callback functions
 void error_callback(int error, const char *description)
 {
     std::cerr << "GLFW Error " << error << ": " << description << std::endl;
@@ -183,11 +151,9 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         glfwSetWindowShouldClose(window, GLFW_TRUE);
     }
 
-    // Delegate particle system keys
     particles_key_callback(window, key, scancode, action, mods, particleSystem.get(), physicsSystem.get());
 
-    // Toggle VSync with F12
-    if (key == GLFW_KEY_F12 && action == GLFW_PRESS)
+    if (key == GLFW_KEY_F10 && action == GLFW_PRESS)
     {
         g_vSync = !g_vSync;
         glfwSwapInterval(g_vSync ? 1 : 0);
@@ -205,32 +171,16 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         std::cout << "Level: " << g_antialiasingLevel << "x" << std::endl;
         std::cout << "Note: Antialiasing changes require application restart to take effect." << std::endl;
         
-        // Save the new setting
         saveSettings();
-    } // Toggle animation with SPACE
+    }
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
     {
         g_animationEnabled = !g_animationEnabled;
         std::cout << "Animation: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
     }
 
-    // Camera control is always enabled; ignore C key toggling
-    if (key == GLFW_KEY_C && action == GLFW_PRESS)
-    {
-        // no-op
-    }
-
-    // Reset camera speed with V key
-    if (key == GLFW_KEY_V && action == GLFW_PRESS && camera)
-    {
-        camera->MovementSpeed = 2.5f;
-        std::cout << "Camera speed reset to: " << camera->MovementSpeed << std::endl;
-    }
-
-    // Toggle spot light with L key
     if (key == GLFW_KEY_L && action == GLFW_PRESS && lightingSystem)
     {
-        // Toggle spot light intensity
         static bool spotLightOn = true;
         spotLightOn = !spotLightOn;
         if (spotLightOn) {
@@ -243,54 +193,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         std::cout << "Spot light (headlight): " << (spotLightOn ? "ON" : "OFF") << std::endl;
     }
 
-    // Change triangle color with different keys
-    if (action == GLFW_PRESS || action == GLFW_REPEAT)
-    {
-        switch (key)
-        {
-        case GLFW_KEY_R:
-            r = (r > 0.5f) ? 0.0f : 1.0f;
-            std::cout << "Red: " << r << std::endl;
-            break;
-        case GLFW_KEY_G:
-            g = (g > 0.5f) ? 0.0f : 1.0f;
-            std::cout << "Green: " << g << std::endl;
-            break;
-        case GLFW_KEY_B:
-            b = (b > 0.5f) ? 0.0f : 1.0f;
-            std::cout << "Blue: " << b << std::endl;
-            break;
-        case GLFW_KEY_T: // Changed from A to T for Transparency
-            a = (a > 0.5f) ? 0.5f : 1.0f;
-            std::cout << "Alpha: " << a << std::endl;
-            break;
-        case GLFW_KEY_EQUAL: // + key (usually Shift + =)
-        case GLFW_KEY_KP_ADD: // Numpad +
-            if (mods & GLFW_MOD_SHIFT || key == GLFW_KEY_KP_ADD)
-            {
-                if (g_antialiasingLevel < 8)
-                {
-                    g_antialiasingLevel *= 2; // 2, 4, 8
-                    if (g_antialiasingLevel > 8) g_antialiasingLevel = 8;
-                    std::cout << "Antialiasing level: " << g_antialiasingLevel << "x (restart required)" << std::endl;
-                    saveSettings();
-                }
-            }
-            break;
-        case GLFW_KEY_MINUS: // - key
-        case GLFW_KEY_KP_SUBTRACT: // Numpad -
-            if (g_antialiasingLevel > 2)
-            {
-                g_antialiasingLevel /= 2; // 8, 4, 2
-                if (g_antialiasingLevel < 2) g_antialiasingLevel = 2;
-                std::cout << "Antialiasing level: " << g_antialiasingLevel << "x (restart required)" << std::endl;
-                saveSettings();
-            }
-            break;
-        }
-    }
-
-    // Toggle gameplay active/pause (for testing) with F5
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS) {
         if (cupcakeGame) {
             cupcakeGame->getGameState().active = !cupcakeGame->getGameState().active;
@@ -304,10 +206,8 @@ void fbsize_callback(GLFWwindow *window, int width, int height)
     g_windowWidth = width;
     g_windowHeight = height;
 
-    // Set viewport
     glViewport(0, 0, width, height);
 
-    // Update projection matrix
     if (height <= 0)
         height = 1; // avoid division by 0
     float ratio = static_cast<float>(width) / height;
@@ -319,7 +219,6 @@ void fbsize_callback(GLFWwindow *window, int width, int height)
         20000.0f           // Far clipping plane
     );
 
-    // Set projection matrix uniform if shader is active
     if (my_shader)
     {
         my_shader->activate();
@@ -334,7 +233,6 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 {
     if (button == GLFW_MOUSE_BUTTON_LEFT && action == GLFW_PRESS)
     {
-        // Handle cupcake projectile via game class
         if (cupcakeGame) {
             cupcakeGame->handleMouseClick(camera.get());
         }
@@ -343,7 +241,7 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
 
 void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 {
-    if (!cameraEnabled || !camera)
+    if (!camera)
         return;
 
     if (firstMouse)
@@ -365,9 +263,6 @@ void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 
 void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
 {
-    if (cameraEnabled)
-    {
-        // Adjust camera movement speed with scroll when camera is enabled
         if (camera)
         {
             // Use multiplicative scaling instead of additive for more predictable behavior
@@ -376,17 +271,6 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
             camera->MovementSpeed = glm::clamp(camera->MovementSpeed, 0.5f, 15.0f);
             std::cout << "Camera speed: " << camera->MovementSpeed << std::endl;
         }
-    }
-    else
-    {
-        // Adjust alpha with scroll when camera is disabled
-        a += static_cast<float>(yoffset) * 0.1f;
-        if (a < 0.0f)
-            a = 0.0f;
-        if (a > 1.0f)
-            a = 1.0f;
-        std::cout << "Alpha adjusted to: " << a << std::endl;
-    }
 }
 
 // Debug output callback
@@ -470,7 +354,6 @@ void APIENTRY gl_debug_callback(GLenum source, GLenum type, GLuint id, GLenum se
     std::cerr << "OpenGL Debug - " << sourceStr << ", " << typeStr << ", " << severityStr << ": " << message << std::endl;
 }
 
-// Function to check OpenGL errors
 void checkGLError(const std::string &location)
 {
     GLenum error = glGetError();
@@ -505,51 +388,29 @@ void checkGLError(const std::string &location)
     }
 }
 
-// Function to initialize assets and shaders
 void init_assets()
 {
-    // Notice: code massively simplified - all moved to specific classes
-    // shader: load, compile, link, initialize params - using lighting shaders
     my_shader = std::make_unique<ShaderProgram>("resources/shaders/phong.vert", "resources/shaders/phong.frag");
     
-    // Initialize particle shader
     particle_shader = std::make_unique<ShaderProgram>("resources/shaders/particle.vert", "resources/shaders/particle.frag");
 
-    // Road shader: reuse basic textured shader files (create if you have them). For now, use "basic" which supports color only; we will bind texture manually.
-    // If "basic" doesn’t support textures, this will still draw; texture use added via fixed pipeline bindings.
     road_shader = std::make_unique<ShaderProgram>("resources/shaders/basic.vert", "resources/shaders/basic.frag");
-    if (!road_shader) {
-        throw std::runtime_error("Failed to create road shader");
-    }
 
-    // Initialize lighting system
     lightingSystem = std::make_unique<LightingSystem>();
     
-    // Initialize physics system
     physicsSystem = std::make_unique<PhysicsSystem>();
     
-    // Set up world bounds (large enough for our scene)
-    // Extend world bounds in -Z to reduce constant boundary collisions during auto-forward motion
     g_worldMin = glm::vec3(-100.0f, -5.0f, -300.0f);
     g_worldMax = glm::vec3(100.0f, 100.0f, 100.0f);
     physicsSystem->setWorldBounds(g_worldMin, g_worldMax);
     
-    // Add some collision objects for testing
-    physicsSystem->addCollisionObject(CollisionObject(CollisionType::BOX, glm::vec3(5.0f, 1.0f, -5.0f), glm::vec3(2.0f, 2.0f, 2.0f)));
-    physicsSystem->addCollisionObject(CollisionObject(CollisionType::SPHERE, glm::vec3(-5.0f, 2.0f, -8.0f), glm::vec3(1.5f, 0.0f, 0.0f)));
-    physicsSystem->addCollisionObject(CollisionObject(CollisionType::PLANE, glm::vec3(0.0f, 0.0f, 0.0f), glm::vec3(0.0f, 1.0f, 0.0f))); // Ground plane
-    
-    // Set up collision callbacks
-    // Throttle wall hit logging to avoid spam when sliding along boundaries
     physicsSystem->setWallHitCallback([&](const glm::vec3& hitPoint) {
-        // Suppress logs when the game is over
         if (cupcakeGame && !cupcakeGame->getGameState().active) return;
          static auto lastPrint = std::chrono::high_resolution_clock::now();
          static glm::vec3 lastPos(FLT_MAX);
          auto now = std::chrono::high_resolution_clock::now();
          float secs = std::chrono::duration<float>(now - lastPrint).count();
 
-         // Print if sufficient time has passed or we hit a noticeably different spot
          if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
              std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
              lastPrint = now;
@@ -566,14 +427,11 @@ void init_assets()
 
     audioEngine = std::make_unique<AudioEngine>();
 
-    // Initialize cupcake game
     cupcakeGame = std::make_unique<CupcakeGame>();
     cupcakeGame->initialize();
 
-    // Initialize road geometry
     initRoadGeometry();
 
-    // Load road texture (JPEG): resources/textures/asphalt.jpg using inline OpenCV helpers
     {
         const std::filesystem::path texPath = "resources/textures/asphalt.jpg";
         try {
@@ -583,7 +441,6 @@ void init_assets()
             g_roadTex = 0;
         }
 
-        // Fallback: create a small checker texture to avoid null deref later
         if (g_roadTex == 0) {
             const int W = 64, H = 64;
             std::vector<unsigned char> pixels(W * H * 3);
@@ -619,45 +476,16 @@ void init_assets()
         std::cout << "Failed to initialize audio engine" << std::endl;
     }
 
-    // Load basic models first
     std::cout << "Loading basic models..." << std::endl;
-    std::vector<std::pair<std::string, std::string>> basicModels = {
-        {"triangle", "resources/objects/triangle.obj"},
-        {"quad", "resources/objects/quad.obj"},
-        {"simple", "resources/objects/simple_triangle.obj"},
-        {"cupcake", "resources/objects/12188_Cupcake_v1_L3.obj"}
-    };
-    
-    for (const auto& [name, path] : basicModels) {
-        try {
-            auto start = std::chrono::high_resolution_clock::now();
-            std::cout << "Loading " << path << "..." << std::endl;
-            
-            auto model = std::make_unique<Model>(path, *my_shader);
-            
-            auto end = std::chrono::high_resolution_clock::now();
-            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
-            
-            std::cout << "✓ Loaded " << name << " (" << model->meshes.size() 
-                      << " meshes) in " << duration.count() << "ms" << std::endl;
-            scene[name] = std::move(model);
-        } catch (const std::exception& e) {
-            std::cerr << "✗ FAILED to load " << name << " from " << path << ": " << e.what() << std::endl;
-        }
-    }
-
-    // Load house models for the route - now loading all 4 types for variety
-    std::cout << "Starting to load house models (all 4 types)..." << std::endl;
-    
-    // All 4 house models for maximum variety
-    std::vector<std::pair<std::string, std::string>> houseModels = {
+    std::vector<std::pair<std::string, std::string>> models = {
+        {"cupcake", "resources/objects/12188_Cupcake_v1_L3.obj"},
         {"house", "resources/objects/house.obj"},
         {"bambo_house", "resources/objects/Bambo_House.obj"},
         {"cyprys_house", "resources/objects/Cyprys_House.obj"},
         {"building", "resources/objects/Building,.obj"}
     };
     
-    for (const auto& [name, path] : houseModels) {
+    for (const auto& [name, path] : models) {
         try {
             auto start = std::chrono::high_resolution_clock::now();
             std::cout << "Loading " << path << "..." << std::endl;
@@ -680,21 +508,6 @@ void init_assets()
         std::cout << "  - " << pair.first << std::endl;
     }
 
-    // Initialize transparent objects - creating 3 semi-transparent objects with different alpha values
-    transparentObjects.clear();
-    transparentObjects.emplace_back("transparent_triangle1", glm::vec3(-2.0f, 1.5f, -4.0f), 
-                                   glm::vec3(0.0f), glm::vec3(0.8f), 
-                                   glm::vec4(1.0f, 0.2f, 0.2f, 0.7f)); // Semi-transparent red
-    
-    transparentObjects.emplace_back("transparent_triangle2", glm::vec3(0.0f, 1.5f, -5.0f), 
-                                   glm::vec3(0.0f), glm::vec3(0.8f), 
-                                   glm::vec4(0.2f, 1.0f, 0.2f, 0.5f)); // Semi-transparent green
-    
-    transparentObjects.emplace_back("transparent_triangle3", glm::vec3(2.0f, 1.5f, -6.0f), 
-                                   glm::vec3(0.0f), glm::vec3(0.8f), 
-                                   glm::vec4(0.2f, 0.2f, 1.0f, 0.3f)); // Semi-transparent blue
-
-    // Set up projection matrix
     if (g_windowHeight <= 0)
         g_windowHeight = 1; // avoid division by 0
     float ratio = static_cast<float>(g_windowWidth) / g_windowHeight;
@@ -715,35 +528,29 @@ void init_assets()
     camera = std::make_unique<Camera>(glm::vec3(0.0f, 2.0f, 5.0f));
     camera->MovementSpeed = 2.5f;
     camera->MouseSensitivity = 0.1f;
-    // Always capture cursor for freelook
     if (GLFWwindow* current = glfwGetCurrentContext()) {
         glfwSetInputMode(current, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         firstMouse = true;
     }
 
-    // Always capture the cursor for free look
     GLFWwindow* current = glfwGetCurrentContext();
     if (current) {
         glfwSetInputMode(current, GLFW_CURSOR, GLFW_CURSOR_DISABLED);
         firstMouse = true;
     }
 
-    // Setup initial road segments along -Z
+    // setup initial game state
     cupcakeGame->getGameState().roadSegments.clear();
     for (int i = 0; i < cupcakeGame->getGameState().roadSegmentCount; ++i) {
         cupcakeGame->getGameState().roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * cupcakeGame->getGameState().roadSegmentLength));
     }
 
-    // House streaming is handled by CupcakeGame::initialize + runtime spawner
-
-    // Set initial uniforms
     my_shader->activate();
     my_shader->setUniform("uProj_m", projectionMatrix);
     my_shader->setUniform("uV_m", viewMatrix);
     my_shader->deactivate();
 }
 
-// Function to load settings from JSON
 nlohmann::json loadSettings()
 {
     try
@@ -770,7 +577,6 @@ nlohmann::json loadSettings()
     }
 }
 
-// Function to validate and apply antialiasing settings
 void validateAntialiasingSettings(const nlohmann::json& settings)
 {
     bool hasAA = settings.contains("antialiasing");
@@ -784,7 +590,6 @@ void validateAntialiasingSettings(const nlohmann::json& settings)
 
     const auto& aaSettings = settings["antialiasing"];
     
-    // Get enabled status
     if (aaSettings.contains("enabled") && aaSettings["enabled"].is_boolean())
     {
         g_antialisingEnabled = aaSettings["enabled"].get<bool>();
@@ -795,7 +600,6 @@ void validateAntialiasingSettings(const nlohmann::json& settings)
         g_antialisingEnabled = false;
     }
     
-    // Get level
     if (aaSettings.contains("level") && aaSettings["level"].is_number_integer())
     {
         g_antialiasingLevel = aaSettings["level"].get<int>();
@@ -806,7 +610,6 @@ void validateAntialiasingSettings(const nlohmann::json& settings)
         g_antialiasingLevel = 4;
     }
     
-    // Validate settings logic
     if (g_antialisingEnabled && g_antialiasingLevel <= 1)
     {
         std::cerr << "Warning: Antialiasing is enabled but level is " << g_antialiasingLevel 
@@ -825,7 +628,6 @@ void validateAntialiasingSettings(const nlohmann::json& settings)
               << ", Level: " << g_antialiasingLevel << std::endl;
 }
 
-// Function to save current settings to JSON
 void saveSettings()
 {
     try
@@ -861,13 +663,10 @@ int main()
 {
     try
     {
-        // Load settings from JSON
         nlohmann::json settings = loadSettings();
 
-        // Validate and apply antialiasing settings
         validateAntialiasingSettings(settings);
 
-        // Get window resolution from settings
         if (settings["default_resolution"]["x"].is_number_integer() &&
             settings["default_resolution"]["y"].is_number_integer())
         {
@@ -875,13 +674,11 @@ int main()
             g_windowHeight = settings["default_resolution"]["y"].get<int>();
         }
 
-        // Get application name
         if (settings["appname"].is_string())
         {
             g_windowTitle = settings["appname"].get<std::string>();
         }
 
-        // Get VSync setting
         if (settings.contains("vsync_enabled") && settings["vsync_enabled"].is_boolean())
         {
             g_vSync = settings["vsync_enabled"].get<bool>();
@@ -890,35 +687,29 @@ int main()
         std::cout << "Application: " << g_windowTitle << std::endl;
         std::cout << "Initial resolution: " << g_windowWidth << "x" << g_windowHeight << std::endl;
 
-        // Check if resources directory exists
         if (!std::filesystem::exists("resources"))
         {
             throw std::runtime_error("Directory 'resources' not found. Various media files are expected to be there.");
         }
 
-        // Initialize GLFW
         if (!glfwInit())
         {
             throw std::runtime_error("Failed to initialize GLFW");
         }
 
-        // Set error callback
         glfwSetErrorCallback(error_callback);
 
-        // Set OpenGL version and profile
         glfwWindowHint(GLFW_CONTEXT_VERSION_MAJOR, 4);
         glfwWindowHint(GLFW_CONTEXT_VERSION_MINOR, 6);
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
-        // Set antialiasing hints if enabled
         if (g_antialisingEnabled)
         {
             glfwWindowHint(GLFW_SAMPLES, g_antialiasingLevel);
             std::cout << "Setting up multisampling with " << g_antialiasingLevel << " samples" << std::endl;
         }
 
-        // Create window
         GLFWwindow *window = glfwCreateWindow(g_windowWidth, g_windowHeight, g_windowTitle.c_str(), NULL, NULL);
         if (!window)
         {
@@ -926,13 +717,10 @@ int main()
             throw std::runtime_error("Failed to create GLFW window");
         }
 
-        // Make the window's context current
         glfwMakeContextCurrent(window);
 
-        // Set VSync
         glfwSwapInterval(g_vSync ? 1 : 0);
 
-        // Initialize GLEW
         GLenum err = glewInit();
         if (err != GLEW_OK)
         {
@@ -940,13 +728,23 @@ int main()
                                      reinterpret_cast<const char *>(glewGetErrorString(err)));
         }
 
-        // Print OpenGL and GLFW versions
         std::cout << "OpenGL Version: " << glGetString(GL_VERSION) << std::endl;
         std::cout << "GLFW Version: " << glfwGetVersionString() << std::endl;
         std::cout << "GLEW Version: " << glewGetString(GLEW_VERSION) << std::endl;
         std::cout << "GLM Version: " << GLM_VERSION_MAJOR << "." << GLM_VERSION_MINOR << "." << GLM_VERSION_PATCH << std::endl;
 
-        // Verify OpenGL version and profile
+        IMGUI_CHECKVERSION();
+        ImGui::CreateContext();
+        ImGuiIO& io = ImGui::GetIO(); (void)io;
+        io.ConfigFlags |= ImGuiConfigFlags_NavEnableKeyboard;
+        
+        ImGui::StyleColorsDark();
+        
+        ImGui_ImplGlfw_InitForOpenGL(window, true);
+        ImGui_ImplOpenGL3_Init("#version 460 core");
+        
+        std::cout << "ImGui initialized successfully" << std::endl;
+
         int major, minor, profile;
         glGetIntegerv(GL_MAJOR_VERSION, &major);
         glGetIntegerv(GL_MINOR_VERSION, &minor);
@@ -962,13 +760,11 @@ int main()
             std::cout << "OpenGL Profile: Not Core!" << std::endl;
         }
 
-        // Check if requested version was obtained
         if (major < 4 || (major == 4 && minor < 6))
         {
             std::cerr << "Warning: OpenGL 4.6 was requested but " << major << "." << minor << " was obtained." << std::endl;
         }
 
-        // Check debug output extension
         if (GLEW_ARB_debug_output)
         {
             std::cout << "Debug output extension is supported." << std::endl;
@@ -982,51 +778,56 @@ int main()
             std::cout << "Debug output extension is not supported." << std::endl;
         }
 
-        // Set up callbacks
         glfwSetKeyCallback(window, key_callback);
         glfwSetFramebufferSizeCallback(window, fbsize_callback);
         glfwSetMouseButtonCallback(window, mouse_button_callback);
         glfwSetCursorPosCallback(window, cursor_position_callback);
         glfwSetScrollCallback(window, scroll_callback); // Initialize OpenGL assets
 
-        // Show a simple loading splash before heavy asset/model loading
+        // loading screen
         {
-            // Update window title
             std::string loadingTitle = g_windowTitle + " | Loading...";
             glfwSetWindowTitle(window, loadingTitle.c_str());
 
-            // Draw a basic splash with a centered bar
-            glDisable(GL_DEPTH_TEST);
-            glClearColor(0.04f, 0.05f, 0.08f, 1.0f); // dark background
+            glClearColor(0.04f, 0.05f, 0.08f, 1.0f);
             glClear(GL_COLOR_BUFFER_BIT);
-            glEnable(GL_SCISSOR_TEST);
-            int bw = static_cast<int>(g_windowWidth * 0.5f);
-            int bh = 20;
-            int bx = (g_windowWidth - bw) / 2;
-            int by = (g_windowHeight - bh) / 2;
-            glScissor(bx, by, bw, bh);
-            glClearColor(0.20f, 0.60f, 0.90f, 1.0f); // bar color
-            glClear(GL_COLOR_BUFFER_BIT);
-            glDisable(GL_SCISSOR_TEST);
+            
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
+            
+            ImGui::SetNextWindowPos(ImVec2(g_windowWidth * 0.5f, g_windowHeight * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowSize(ImVec2(400.0f, 150.0f), ImGuiCond_Always);
+            ImGui::Begin("Loading", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
+            
+            ImGui::Text("Loading Game Assets...");
+            ImGui::Separator();
+            ImGui::Text("Please wait while we load:");
+            ImGui::BulletText("3D Models and Textures");
+            ImGui::BulletText("Audio Files");
+            ImGui::BulletText("Game Systems");
+            ImGui::Separator();
+            ImGui::Text("This may take a few moments...");
+            
+            ImGui::End();
+            
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+            
             glfwSwapBuffers(window);
             glfwPollEvents();
-            glEnable(GL_DEPTH_TEST);
         }
         init_assets();
 
-        // Enable depth testing
         glEnable(GL_DEPTH_TEST);
 
-        // Enable alpha blending for transparency
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
 
-        // Enable multisampling if antialiasing is enabled
         if (g_antialisingEnabled)
         {
             glEnable(GL_MULTISAMPLE);
             
-            // Verify multisampling is available
             GLint samples;
             glGetIntegerv(GL_SAMPLES, &samples);
             std::cout << "Multisampling enabled with " << samples << " samples" << std::endl;
@@ -1039,10 +840,10 @@ int main()
         else
         {
             std::cout << "Antialiasing disabled" << std::endl;
-        } // Variables for FPS calculation
+        }
         auto lastTime = std::chrono::high_resolution_clock::now();
         int frameCount = 0;
-        float fps = 0.0f; // Print controls info
+        float fps = 0.0f;
         std::cout << "\nControls:\n";
         std::cout << "R, G, B keys - Toggle red, green, blue components\n";
         std::cout << "T key - Toggle alpha/transparency\n";
@@ -1104,7 +905,7 @@ int main()
         std::cout << "- Audio will be louder/quieter based on distance to triangle\n";
         std::cout << "- Sound will pan left/right based on triangle's relative position\n\n";
         
-        std::cout << "🧁 CUPCAKE DELIVERY GAME:\n";
+        std::cout << "🧁 CUPCAGAME:\n";
         std::cout << "- OBJECTIVE: Deliver cupcakes to houses with glowing indicators\n";
         std::cout << "- CONTROLS: Use mouse to look around, left click to throw cupcakes\n";
         std::cout << "- SCORING: +8 money and +5 happiness for correct deliveries\n";
@@ -1115,14 +916,11 @@ int main()
         std::cout << "- F5: Pause/Resume game\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
-        // Main rendering loop
         while (!glfwWindowShouldClose(window))
         {
-            // Calculate FPS and time
             auto currentTime = std::chrono::high_resolution_clock::now();
             frameCount++;
 
-            // Calculate elapsed time for animations
             float elapsedTime = std::chrono::duration<float>(currentTime - startTime).count(); // Update FPS once per second
             float timeDelta = std::chrono::duration<float>(currentTime - lastTime).count();
             if (timeDelta >= 1.0f)
@@ -1131,7 +929,6 @@ int main()
                 frameCount = 0;
                 lastTime = currentTime;
 
-                // Update window title with FPS, VSync, Antialiasing, and Game status
                 int houseCount = cupcakeGame ? static_cast<int>(cupcakeGame->getGameState().houses.size()) : 0;
                 int money = cupcakeGame ? cupcakeGame->getGameState().money : 0;
                 int happiness = cupcakeGame ? cupcakeGame->getGameState().happiness : 0;
@@ -1147,26 +944,24 @@ int main()
                                     " | Houses:" + std::to_string(houseCount) +
                                     (gameActive ? "" : " | 💥 GAME OVER");
                 glfwSetWindowTitle(window, title.c_str());
-            } // Process camera input and update view matrix
+            }
             if (camera && cupcakeGame && cupcakeGame->getGameState().active)
             {
-                // Calculate delta time for smooth camera movement
                 static auto lastFrameTime = currentTime;
                 float deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
                 lastFrameTime = currentTime;
 
-                // Update cupcake game
                 cupcakeGame->update(deltaTime, camera.get(), audioEngine.get(), particleSystem.get(), physicsSystem.get());
 
-                // Update view matrix from camera, with quake shake if active
+                // update view matrix with earthquake shake if active
                 glm::mat4 V = camera->GetViewMatrix();
                 if (cupcakeGame->getGameState().quakeActive) {
-                    // Stronger shake that scales with proximity to epicenter
+                    // stronger shake effect during earthquake, based on the epicenter
                     float dist = glm::length((camera ? camera->Position : glm::vec3(0.0f)) - cupcakeGame->getGameState().quakeEpicenter);
-                    float k = 10.0f; // tighter falloff
+                    float k = 10.0f;
                     float falloff = 1.0f / (1.0f + dist / k);
                     float t = elapsedTime * 22.0f;
-                    float amp = cupcakeGame->getGameState().quakeAmplitude * 1.8f; // increase overall intensity
+                    float amp = cupcakeGame->getGameState().quakeAmplitude * 1.8f;
                     float ax = sin(t * 1.9f) * amp * falloff;
                     float ay = cos(t * 1.4f) * amp * 0.8f * falloff;
                     V = glm::translate(V, glm::vec3(ax, ay, 0.0f));
@@ -1174,24 +969,17 @@ int main()
                 viewMatrix = V;
             }
 
-            // Update 3D audio listener position based on camera
             audioEngine->setListener(camera->Position, camera->Front, camera->Up);
 
-            // Clear the screen
-            // Dynamic background: light blue normally, smoothly blend to gray during earthquake and back after it ends
             {
-                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // light blue
-                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f); // gray
+                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f);
+                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f);
 
-                // Persistent blend factor that eases in/out across frames
                 static float quakeBlend = 0.0f;
-                // Compute target based on quake state
                 float target = cupcakeGame->getGameState().quakeActive ? 1.0f : 0.0f;
-                // Ease rate (seconds^-1) scaled by frame time; faster when activating, slower when deactivating
                 float easeInRate = 2.5f;
                 float easeOutRate = 1.5f;
 
-                // Approximate dt via FPS estimate or last timeDelta; we have timeDelta above calculated once per second for FPS.
                 static auto lastBG = std::chrono::high_resolution_clock::now();
                 auto nowBG = std::chrono::high_resolution_clock::now();
                 float dtBG = std::chrono::duration<float>(nowBG - lastBG).count();
@@ -1206,61 +994,38 @@ int main()
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             }
 
-            // Update lighting system (reduce frequency for better performance)
             static float lastLightingUpdate = 0.0f;
-            const float lightingUpdateInterval = 1.0f / 30.0f; // Update at 30 FPS instead of 60+
+            const float lightingUpdateInterval = 1.0f / 30.0f;
             
             if (lightingSystem && (elapsedTime - lastLightingUpdate) >= lightingUpdateInterval) {
-                // Update animated lights
                 lightingSystem->updateLights(elapsedTime);
                 
-                // Update spot light to follow camera (headlight effect)
                 if (camera) {
                     lightingSystem->spotLight.position = camera->Position;
                     lightingSystem->spotLight.direction = camera->Front;
                 } else {
-                    // Static camera fallback
                     lightingSystem->spotLight.position = glm::vec3(0.0f, 2.0f, 5.0f);
                     lightingSystem->spotLight.direction = glm::vec3(0.0f, 0.0f, -1.0f);
                 }
                 
-                // Get current camera position for lighting calculations
                 glm::vec3 viewPos = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
                 
-                // Setup lighting uniforms
                 lightingSystem->setupLightUniforms(*my_shader, viewPos);
                 
                 lastLightingUpdate = elapsedTime;
             }
 
-            // STEP 1: Render opaque objects first
             my_shader->activate();
 
-            // Set view matrix (updated each frame for camera movement)
             my_shader->setUniform("uV_m", viewMatrix); 
 
-            // Triangle: Very subtle rotation around Y-axis (left object) - use cupcake as fallback
-            if (scene.find("triangle") != scene.end())
+            
+            if (scene.find("cupcake") != scene.end())
             {
-                glm::vec3 position(-1.5f, 0.0f, -3.0f);
-                glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 8.0f : 0.0f, 0.0f); // Very slow Y rotation
-                glm::vec3 scale(1.0f);                                                          // No scaling
-                
-                // Update triangle audio position to match visual position
-                if (audioEngine && audioEngine->isInitialized() && g_triangleSoundHandle != 0) {
-                    audioEngine->setSoundPosition(g_triangleSoundHandle, position);
-                }
-                
-                scene.at("triangle")->draw(position, rotation, scale);
-            }
-            else if (scene.find("cupcake") != scene.end())
-            {
-                // Fallback to cupcake model if triangle isn't available
                 glm::vec3 position(-1.5f, 0.0f, -3.0f);
                 glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 8.0f : 0.0f, 0.0f);
                 glm::vec3 scale(0.15f, 0.15f, 0.15f); // Smaller scale for cupcake
                 
-                // Update audio position to match visual position
                 if (audioEngine && audioEngine->isInitialized() && g_triangleSoundHandle != 0) {
                     audioEngine->setSoundPosition(g_triangleSoundHandle, position);
                 }
@@ -1268,16 +1033,13 @@ int main()
                 scene.at("cupcake")->draw(position, rotation, scale);
             }
 
-            // Draw road segments with road texture (direct rendering)
             if (road_shader && g_roadVAO != 0) {
                 road_shader->activate();
                 
-                // Set shared matrices
                 road_shader->setUniform("uV_m", viewMatrix);
                 road_shader->setUniform("uProj_m", projectionMatrix);
                 road_shader->setUniform("uniform_Color", glm::vec4(0.9f, 0.9f, 0.9f, 1.0f)); // Slightly gray for asphalt
 
-                // Bind texture and set uniforms
                 if (g_roadTex != 0) {
                     glActiveTexture(GL_TEXTURE0);
                     glBindTexture(GL_TEXTURE_2D, g_roadTex);
@@ -1287,31 +1049,25 @@ int main()
                     road_shader->setUniform("useTexture", false);
                 }
 
-                // Bind the road VAO
+                
                 glBindVertexArray(g_roadVAO);
 
-                // Render all road segments to create continuous asphalt road
                 for (const auto& seg : cupcakeGame->getGameState().roadSegments) {
                     glm::vec3 pos(seg.x, -0.02f, seg.z); // Slightly below ground to avoid z-fighting
                     
-                    // Make road span the full width between houses plus some margin
                     float roadWidth = cupcakeGame->getGameState().roadSegmentWidth;
                     float roadLength = cupcakeGame->getGameState().roadSegmentLength;
                     glm::vec3 scl(roadWidth, 1.0f, roadLength);
 
-                    // Create transformation matrix
                     glm::mat4 model = glm::mat4(1.0f);
                     model = glm::translate(model, pos);
                     model = glm::scale(model, scl);
                     
-                    // Set model matrix
                     road_shader->setUniform("uM_m", model);
                     
-                    // Draw the road segment
                     glDrawElements(GL_TRIANGLES, 6, GL_UNSIGNED_INT, 0);
                 }
 
-                // Cleanup
                 glBindVertexArray(0);
                 if (g_roadTex != 0) {
                     glBindTexture(GL_TEXTURE_2D, 0);
@@ -1319,28 +1075,23 @@ int main()
                 road_shader->deactivate();
             }
 
-            // Draw houses with improved rendering and all 4 house types
             const float cameraZ = camera ? camera->Position.z : 0.0f;
-            const float cullingDistance = 120.0f; // Render houses within range
+            const float cullingDistance = 120.0f; // render houses within range
             
             for (const auto& h : cupcakeGame->getGameState().houses) {
-                // Frustum culling - skip houses too far away
                 if (std::abs(h.position.z - cameraZ) > cullingDistance) {
                     continue;
                 }
                 
-                // Get the model name from the house data (set by HouseGenerator)
                 std::string modelName = h.modelName;
                 if (modelName.empty()) {
-                    modelName = "house"; // fallback
+                    modelName = "house";
                 }
                 
-                // Check if the model exists in the scene
                 if (scene.find(modelName) != scene.end()) {
                     glm::vec3 pos = h.position;
-                    glm::vec3 rot(0.0f, h.id * 23.0f * (3.14159f / 180.0f), 0.0f); // Varied rotation
+                    glm::vec3 rot(0.0f, h.id * 23.0f * (3.14159f / 180.0f), 0.0f);
                     
-                    // Set appropriate scales for different house types
                     glm::vec3 scl;
                     if (modelName == "bambo_house") {
                         scl = glm::vec3(0.35f, 0.35f, 0.35f);
@@ -1353,35 +1104,24 @@ int main()
                     }
                     
                     scene.at(modelName)->draw(pos, rot, scl);
-                } else {
-                    // Fallback: use cupcake as placeholder if model not loaded
-                    if (scene.find("cupcake") != scene.end()) {
-                        glm::vec3 pos = h.position;
-                        pos.y += 1.0f;
-                        glm::vec3 rot(0.0f);
-                        glm::vec3 scl(0.05f, 0.05f, 0.05f);
-                        scene.at("cupcake")->draw(pos, rot, scl);
-                    }
                 }
-                
-                // Add visual indicator for requesting houses
+            
                 if (h.requesting) {
-                    // Draw a cupcake indicator above the house to show it's requesting
                     if (scene.find("cupcake") != scene.end()) {
                         glm::vec3 indicatorPos = h.position;
                         indicatorPos.y += h.indicatorHeight;
-                        glm::vec3 rot(0.0f, elapsedTime * 60.0f, 0.0f); // Spin the indicator for visibility
+                        glm::vec3 rot(0.0f, elapsedTime * 60.0f, 0.0f);
                         glm::vec3 scl(0.12f, 0.12f, 0.12f);
-                        // Use cupcake as indicator for requesting houses
                         scene.at("cupcake")->draw(indicatorPos, rot, scl);
                     }
                 }
             }
 
-            // Render cupcake projectiles using Projectile class
-            for (const auto& projectile : cupcakeGame->getGameState().projectiles) {
-                if (projectile && projectile->alive) {
-                    projectile->draw(*my_shader, viewMatrix, projectionMatrix);
+            if (scene.find("cupcake") != scene.end()) {
+                for (const auto& projectile : cupcakeGame->getGameState().projectiles) {
+                    if (projectile && projectile->alive) {
+                        projectile->draw(scene.at("cupcake").get());
+                    }
                 }
             }
 
@@ -1399,36 +1139,16 @@ int main()
                     }
                 }
             }
-
-            // Quad: Subtle translation up/down (center object) - use house as fallback
-            if (scene.find("quad") != scene.end())
-            {
-                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
-                glm::vec3 rotation(0.0f);                                                            // No rotation
-                glm::vec3 scale(g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f); // Very subtle scale
-                scene.at("quad")->draw(position, rotation, scale);
-            }
             else if (scene.find("house") != scene.end())
             {
-                // Fallback to house model
                 glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
                 glm::vec3 rotation(0.0f);
                 glm::vec3 scale(0.02f * (g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f));
                 scene.at("house")->draw(position, rotation, scale);
             }
 
-            // Simple triangle: Subtle combined rotation (right object) - use building as fallback
-            if (scene.find("simple") != scene.end())
+            if (scene.find("building") != scene.end())
             {
-                glm::vec3 position(1.5f, 0.0f, -3.0f);
-                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f,
-                                   g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
-                glm::vec3 scale(0.8f); // Smaller scale
-                scene.at("simple")->draw(position, rotation, scale);
-            }
-            else if (scene.find("building") != scene.end())
-            {
-                // Fallback to building model
                 glm::vec3 position(1.5f, 0.0f, -3.0f);
                 glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f,
                                    g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
@@ -1436,115 +1156,73 @@ int main()
                 scene.at("building")->draw(position, rotation, scale);
             }
 
-            // STEP 2: Render transparent objects (back-to-front order)
-            if (!transparentObjects.empty())
+            // render sun
+            if (scene.find("cupcake") != scene.end() && lightingSystem)
             {
-                // Calculate distances from camera and sort
-                glm::vec3 cameraPos = cameraEnabled && camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+                glm::vec3 sunDirection = -lightingSystem->dirLight.direction;
                 
-                for (auto& obj : transparentObjects)
-                {
-                    // Apply animation to positions
-                    glm::vec3 animatedPos = obj.position;
-                    if (g_animationEnabled)
-                    {
-                        // Different animation patterns for each transparent object
-                        if (obj.name == "transparent_triangle1")
-                        {
-                            animatedPos.y += sin(elapsedTime * 0.5f) * 0.3f;
-                        }
-                        else if (obj.name == "transparent_triangle2")
-                        {
-                            animatedPos.x += cos(elapsedTime * 0.7f) * 0.2f;
-                        }
-                        else if (obj.name == "transparent_triangle3")
-                        {
-                            animatedPos.z += sin(elapsedTime * 0.6f) * 0.1f;
-                        }
-                    }
-                    
-                    obj.distance = glm::length(cameraPos - animatedPos);
-                }
+                float sunDistance = 100.0f;
+                glm::vec3 cameraPos = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+                glm::vec3 sunPosition = cameraPos + sunDirection * sunDistance;
                 
-                // Sort by distance (farthest first for correct alpha blending)
-                std::sort(transparentObjects.begin(), transparentObjects.end(),
-                         [](const TransparentObject& a, const TransparentObject& b) {
-                             return a.distance > b.distance;
-                         });
+                sunPosition.y = glm::max(sunPosition.y, 20.0f);
                 
-                // Render transparent objects back-to-front
-                for (const auto& obj : transparentObjects)
-                {
-                    // Apply animation to positions (same logic as above for consistency)
-                    glm::vec3 animatedPos = obj.position;
-                    glm::vec3 animatedRot = obj.rotation;
-                    if (g_animationEnabled)
-                    {
-                        if (obj.name == "transparent_triangle1")
-                        {
-                            animatedPos.y += sin(elapsedTime * 0.5f) * 0.3f;
-                            animatedRot.y = elapsedTime * 15.0f;
-                        }
-                        else if (obj.name == "transparent_triangle2")
-                        {
-                            animatedPos.x += cos(elapsedTime * 0.7f) * 0.2f;
-                            animatedRot.x = elapsedTime * 20.0f;
-                        }
-                        else if (obj.name == "transparent_triangle3")
-                        {
-                            animatedPos.z += sin(elapsedTime * 0.6f) * 0.1f;
-                            animatedRot.z = elapsedTime * 12.0f;
-                        }
-                    }
-                    
-                    // Use triangle model for transparent objects (could be any model)
-                    // Note: This will use the same color as the main objects (r,g,b,a)
-                    if (scene.find("triangle") != scene.end())
-                    {
-                        scene.at("triangle")->draw(animatedPos, animatedRot, obj.scale);
-                    }
-                    else if (scene.find("cupcake") != scene.end())
-                    {
-                        // Fallback to cupcake model for transparent objects
-                        glm::vec3 fallbackScale = obj.scale * 0.1f; // Much smaller since cupcake is detailed
-                        scene.at("cupcake")->draw(animatedPos, animatedRot, fallbackScale);
-                    }
-                }
+                glm::vec3 sunRotation(0.0f, g_animationEnabled ? elapsedTime * 30.0f : 0.0f, 0.0f); // rotation for glowing
+                glm::vec3 sunScale(3.0f);
+                
+                my_shader->setUniform("material.emission", glm::vec3(2.0f, 1.5f, 0.5f)); // Bright yellow-orange emission
+                
+                scene.at("cupcake")->draw(sunPosition, sunRotation, sunScale);
+                
+                my_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
             }
 
             my_shader->deactivate();
+
+            ImGui_ImplOpenGL3_NewFrame();
+            ImGui_ImplGlfw_NewFrame();
+            ImGui::NewFrame();
             
-            // Update and render particle system
-            if (particleSystem && g_animationEnabled) {
-                // Calculate delta time for particle physics
-                static auto lastParticleTime = currentTime;
-                float particleDeltaTime = std::chrono::duration<float>(currentTime - lastParticleTime).count();
-                lastParticleTime = currentTime;
-
-                // Update particle system faster to look like an aura
-                particleSystem->update(particleDeltaTime * 1.5f);
-
-                // IMPORTANT: Do NOT bind particle emitter to camera anymore.
-                // Emitter position is set when a house is active in the indicator block.
-                // If no active house, move emitter far away to effectively hide particles.
-                if (cupcakeGame->getGameState().requestingHouseId < 0) {
-                    particleSystem->setEmitterPosition(glm::vec3(0.0f, -10000.0f, 0.0f));
-                }
-
-                // Render particles
-                // Provide time to particle shader for subtle flicker
-                if (particle_shader) {
-                    particle_shader->activate();
-                    particle_shader->setUniform("uTime", elapsedTime);
-                    particle_shader->deactivate();
-                }
-                particleSystem->draw(viewMatrix, projectionMatrix);
-            }
-
-            // HUD / Overlays
-            // Simple "GAME OVER" overlay when gameplay is inactive
             if (!cupcakeGame->getGameState().active) {
-                // Draw a centered translucent panel using scissor without altering global background color intent
+                ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
+                ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowWidth), static_cast<float>(g_windowHeight)));
+                ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.7f)); // Semi-transparent black
+                ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | 
+                            ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
+                
+                float windowWidth = ImGui::GetWindowSize().x;
+                float windowHeight = ImGui::GetWindowSize().y;
+                
+                ImVec2 titleSize = ImGui::CalcTextSize("GAME OVER");
+                ImGui::SetCursorPos(ImVec2((windowWidth - titleSize.x) * 0.5f, windowHeight * 0.3f));
+                
+                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f)); // Red text
+                ImGui::Text("GAME OVER");
+                ImGui::PopStyleColor();
+                
+                ImGui::SetCursorPos(ImVec2((windowWidth - 350) * 0.5f, windowHeight * 0.45f));
+                ImGui::BeginChild("GameStats", ImVec2(350.0f, 180.0f), true);
+                ImGui::Text("Final Statistics:");
+                ImGui::Separator();
+                ImGui::Text("Money Earned: $%d", cupcakeGame->getGameState().money);
+                ImGui::Text("Happiness: %d%%", cupcakeGame->getGameState().happiness);
+                ImGui::Separator();
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Controls:");
+                ImGui::Text("Press F5 to restart");
+                ImGui::Text("Press ESC to quit");
+                ImGui::EndChild();
+                
+                ImGui::End();
+                ImGui::PopStyleColor();
+                
+                std::string title = g_windowTitle + " | GAME OVER";
+                glfwSetWindowTitle(window, title.c_str());
+            }
+            
+            ImGui::Render();
+            ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
+
+            if (!cupcakeGame->getGameState().active) {
                 glEnable(GL_SCISSOR_TEST);
                 int rw = static_cast<int>(g_windowWidth * 0.65f);
                 int rh = static_cast<int>(g_windowHeight * 0.28f);
@@ -1552,39 +1230,34 @@ int main()
                 int ry = (g_windowHeight - rh) / 2;
                 glScissor(rx, ry, rw, rh);
 
-                // Choose panel color based on current sky color so it’s not pure black
-                // Recompute the sky color similarly to the clear step to pick a suitable panel tint
-                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // light blue
-                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f); // gray
-                // We don’t have access to the persistent quakeBlend here; approximate via darker overlay that works on both
-                glm::vec3 panel = glm::mix(quakeSky, normalSky, 0.25f) * 0.6f; // soft bluish-gray
-                glClearColor(panel.r, panel.g, panel.b, 0.55f); // semi-transparent, not pure black
+                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f);
+                glm::vec3 quakeSky  = glm::vec3(0.55f, 0.55f, 0.55f);
+                glm::vec3 panel = glm::mix(quakeSky, normalSky, 0.25f) * 0.6f;
+                glClearColor(panel.r, panel.g, panel.b, 0.55f);
                 glClear(GL_COLOR_BUFFER_BIT);
                 glDisable(GL_SCISSOR_TEST);
 
-                // Also set window title to reflect game over status prominently
                 std::string title = g_windowTitle + " | GAME OVER";
                 glfwSetWindowTitle(window, title.c_str());
             }
 
-            // Check for errors
             checkGLError("Main Loop");
 
-            // Swap front and back buffers
             glfwSwapBuffers(window);
 
-            // Poll for and process events
             glfwPollEvents();
         }
 
-        // Clean up GL resources
         my_shader->clear();
         if (particle_shader) {
             particle_shader->clear();
         }
         cleanupRoadGeometry();
 
-        // Clean up
+        ImGui_ImplOpenGL3_Shutdown();
+        ImGui_ImplGlfw_Shutdown();
+        ImGui::DestroyContext();
+
         glfwDestroyWindow(window);
         glfwTerminate();
 

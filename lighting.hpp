@@ -9,16 +9,18 @@ struct Material {
     glm::vec3 diffuse;   // Diffuse color
     glm::vec3 specular;  // Specular color
     float shininess;     // Shininess exponent
+    glm::vec3 emission;  // Emissive color (self-illumination)
     
     // Default constructor with reasonable values
     Material() 
         : ambient(0.2f, 0.2f, 0.2f)
         , diffuse(0.8f, 0.8f, 0.8f)
         , specular(1.0f, 1.0f, 1.0f)
-        , shininess(32.0f) {}
+        , shininess(32.0f)
+        , emission(0.0f, 0.0f, 0.0f) {}
         
     Material(glm::vec3 amb, glm::vec3 diff, glm::vec3 spec, float shin)
-        : ambient(amb), diffuse(diff), specular(spec), shininess(shin) {}
+        : ambient(amb), diffuse(diff), specular(spec), shininess(shin), emission(0.0f, 0.0f, 0.0f) {}
 };
 
 // Directional light (like the sun)
