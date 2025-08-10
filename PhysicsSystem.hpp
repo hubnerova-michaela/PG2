@@ -80,6 +80,8 @@ public:
     // Callbacks
     void setWallHitCallback(std::function<void(const glm::vec3&)> callback);
     void setObjectHitCallback(std::function<void(const glm::vec3&)> callback);
+
+    void removeCollisionObject(const glm::vec3& position);
     
 private:
     glm::vec3 getNormalAtCollision(const glm::vec3& position, float radius) const;

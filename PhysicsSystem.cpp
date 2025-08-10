@@ -214,3 +214,14 @@ void PhysicsSystem::setWallHitCallback(std::function<void(const glm::vec3&)> cal
 void PhysicsSystem::setObjectHitCallback(std::function<void(const glm::vec3&)> callback) {
     objectHitCallback = callback;
 }
+
+void PhysicsSystem::removeCollisionObject(const glm::vec3& position) {
+    collisionObjects.erase(
+        std::remove_if(collisionObjects.begin(), collisionObjects.end(),
+            [&](const CollisionObject& obj) {
+                // Using a small epsilon for floating-point comparison
+                return glm::all(glm::epsilonEqual(obj.position, position, 0.001f));
+            }),
+        collisionObjects.end()
+    );
+}
