@@ -117,11 +117,15 @@ void LightingSystem::setupLightUniforms(ShaderProgram& shader, const glm::vec3& 
     // Set view position
     shader.setUniform("viewPos", viewPos);
     
-    // Setup all light types
-    setupMaterial(shader);
-    setupDirectionalLight(shader);
-    setupPointLights(shader);
-    setupSpotLight(shader);
+    // Setup all light types with error checking
+    try {
+        setupMaterial(shader);
+        setupDirectionalLight(shader);
+        setupPointLights(shader);
+        setupSpotLight(shader);
+    } catch (const std::exception& e) {
+        std::cerr << "Error setting up lighting uniforms: " << e.what() << std::endl;
+    }
     
     shader.deactivate();
 }
@@ -141,8 +145,13 @@ void LightingSystem::setupDirectionalLight(ShaderProgram& shader) {
 }
 
 void LightingSystem::setupPointLights(ShaderProgram& shader) {
+    // Pre-build uniform names to avoid string concatenation in loop
+    static const std::vector<std::string> uniformNames = {
+        "pointLights[0]", "pointLights[1]", "pointLights[2]"
+    };
+    
     for (int i = 0; i < 3; i++) {
-        std::string base = "pointLights[" + std::to_string(i) + "]";
+        const std::string& base = uniformNames[i];
         
         shader.setUniform(base + ".position", pointLights[i].position);
         shader.setUniform(base + ".constant", pointLights[i].constant);

@@ -32,6 +32,7 @@
 #include "particles.cpp"
 #include "TextureLoader.hpp"
 #include "CupcakeGame.hpp"
+#include "HouseGenerator.hpp"
 #include <algorithm>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/norm.hpp>
@@ -49,13 +50,13 @@ static GLuint g_roadEBO = 0;
 
 // Function to initialize road geometry
 void initRoadGeometry() {
-    // Create a simple quad for road segments
+    // Create a wider quad for road segments - spans the full width between houses
     float roadVertices[] = {
         // positions        // texture coords
-        -0.5f, 0.0f, -0.5f,  0.0f, 0.0f,  // bottom left
-         0.5f, 0.0f, -0.5f,  1.0f, 0.0f,  // bottom right
-         0.5f, 0.0f,  0.5f,  1.0f, 1.0f,  // top right
-        -0.5f, 0.0f,  0.5f,  0.0f, 1.0f   // top left
+        -1.0f, 0.0f, -1.0f,  0.0f, 0.0f,  // bottom left
+         1.0f, 0.0f, -1.0f,  2.0f, 0.0f,  // bottom right (increased U coord for tiling)
+         1.0f, 0.0f,  1.0f,  2.0f, 2.0f,  // top right
+        -1.0f, 0.0f,  1.0f,  0.0f, 2.0f   // top left
     };
     
     unsigned int roadIndices[] = {
@@ -540,19 +541,21 @@ void init_assets()
     
     // Set up collision callbacks
     // Throttle wall hit logging to avoid spam when sliding along boundaries
-    physicsSystem->setWallHitCallback([](const glm::vec3& hitPoint) {
-        static auto lastPrint = std::chrono::high_resolution_clock::now();
-        static glm::vec3 lastPos(FLT_MAX);
-        auto now = std::chrono::high_resolution_clock::now();
-        float secs = std::chrono::duration<float>(now - lastPrint).count();
+    physicsSystem->setWallHitCallback([&](const glm::vec3& hitPoint) {
+        // Suppress logs when the game is over
+        if (cupcakeGame && !cupcakeGame->getGameState().active) return;
+         static auto lastPrint = std::chrono::high_resolution_clock::now();
+         static glm::vec3 lastPos(FLT_MAX);
+         auto now = std::chrono::high_resolution_clock::now();
+         float secs = std::chrono::duration<float>(now - lastPrint).count();
 
-        // Print if sufficient time has passed or we hit a noticeably different spot
-        if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
-            std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
-            lastPrint = now;
-            lastPos = hitPoint;
-        }
-    });
+         // Print if sufficient time has passed or we hit a noticeably different spot
+         if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
+             std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+             lastPrint = now;
+             lastPos = hitPoint;
+         }
+     });
     
     physicsSystem->setObjectHitCallback([](const glm::vec3& hitPoint) {
         std::cout << "Object hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
@@ -616,10 +619,37 @@ void init_assets()
         std::cout << "Failed to initialize audio engine" << std::endl;
     }
 
-    // Load house models for the route with error handling
-    std::cout << "Starting to load house models..." << std::endl;
+    // Load basic models first
+    std::cout << "Loading basic models..." << std::endl;
+    std::vector<std::pair<std::string, std::string>> basicModels = {
+        {"triangle", "resources/objects/triangle.obj"},
+        {"quad", "resources/objects/quad.obj"},
+        {"simple", "resources/objects/simple_triangle.obj"},
+        {"cupcake", "resources/objects/12188_Cupcake_v1_L3.obj"}
+    };
     
-    // Try to load each house model and only add to scene if successful
+    for (const auto& [name, path] : basicModels) {
+        try {
+            auto start = std::chrono::high_resolution_clock::now();
+            std::cout << "Loading " << path << "..." << std::endl;
+            
+            auto model = std::make_unique<Model>(path, *my_shader);
+            
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            
+            std::cout << "✓ Loaded " << name << " (" << model->meshes.size() 
+                      << " meshes) in " << duration.count() << "ms" << std::endl;
+            scene[name] = std::move(model);
+        } catch (const std::exception& e) {
+            std::cerr << "✗ FAILED to load " << name << " from " << path << ": " << e.what() << std::endl;
+        }
+    }
+
+    // Load house models for the route - now loading all 4 types for variety
+    std::cout << "Starting to load house models (all 4 types)..." << std::endl;
+    
+    // All 4 house models for maximum variety
     std::vector<std::pair<std::string, std::string>> houseModels = {
         {"house", "resources/objects/house.obj"},
         {"bambo_house", "resources/objects/Bambo_House.obj"},
@@ -629,12 +659,19 @@ void init_assets()
     
     for (const auto& [name, path] : houseModels) {
         try {
-            std::cout << "Attempting to load " << path << "..." << std::endl;
+            auto start = std::chrono::high_resolution_clock::now();
+            std::cout << "Loading " << path << "..." << std::endl;
+            
             auto model = std::make_unique<Model>(path, *my_shader);
-            std::cout << "Successfully loaded " << name << " with " << model->meshes.size() << " meshes" << std::endl;
+            
+            auto end = std::chrono::high_resolution_clock::now();
+            auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+            
+            std::cout << "✓ Loaded " << name << " (" << model->meshes.size() 
+                      << " meshes) in " << duration.count() << "ms" << std::endl;
             scene[name] = std::move(model);
         } catch (const std::exception& e) {
-            std::cerr << "FAILED to load " << name << " from " << path << ": " << e.what() << std::endl;
+            std::cerr << "✗ FAILED to load " << name << " from " << path << ": " << e.what() << std::endl;
         }
     }
     
@@ -697,20 +734,7 @@ void init_assets()
         cupcakeGame->getGameState().roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * cupcakeGame->getGameState().roadSegmentLength));
     }
 
-    // Pre-spawn initial houses alternating left/right
-    cupcakeGame->getGameState().houses.clear();
-    float z = -10.0f;
-    bool left = true;
-    for (int i = 0; i < 14; ++i) {
-        House h;
-        h.id = cupcakeGame->getGameState().nextHouseId++;
-        h.position = glm::vec3(left ? -cupcakeGame->getGameState().houseOffsetX : cupcakeGame->getGameState().houseOffsetX, 1.0f, z);
-        h.halfExtents = glm::vec3(1.0f, 2.0f, 1.0f);
-        h.requesting = false;
-        cupcakeGame->getGameState().houses.push_back(h);
-        z -= cupcakeGame->getGameState().houseSpacing;
-        left = !left;
-    }
+    // House streaming is handled by CupcakeGame::initialize + runtime spawner
 
     // Set initial uniforms
     my_shader->activate();
@@ -964,6 +988,30 @@ int main()
         glfwSetMouseButtonCallback(window, mouse_button_callback);
         glfwSetCursorPosCallback(window, cursor_position_callback);
         glfwSetScrollCallback(window, scroll_callback); // Initialize OpenGL assets
+
+        // Show a simple loading splash before heavy asset/model loading
+        {
+            // Update window title
+            std::string loadingTitle = g_windowTitle + " | Loading...";
+            glfwSetWindowTitle(window, loadingTitle.c_str());
+
+            // Draw a basic splash with a centered bar
+            glDisable(GL_DEPTH_TEST);
+            glClearColor(0.04f, 0.05f, 0.08f, 1.0f); // dark background
+            glClear(GL_COLOR_BUFFER_BIT);
+            glEnable(GL_SCISSOR_TEST);
+            int bw = static_cast<int>(g_windowWidth * 0.5f);
+            int bh = 20;
+            int bx = (g_windowWidth - bw) / 2;
+            int by = (g_windowHeight - bh) / 2;
+            glScissor(bx, by, bw, bh);
+            glClearColor(0.20f, 0.60f, 0.90f, 1.0f); // bar color
+            glClear(GL_COLOR_BUFFER_BIT);
+            glDisable(GL_SCISSOR_TEST);
+            glfwSwapBuffers(window);
+            glfwPollEvents();
+            glEnable(GL_DEPTH_TEST);
+        }
         init_assets();
 
         // Enable depth testing
@@ -1054,7 +1102,17 @@ int main()
         std::cout << "- Listener position and orientation follow camera\n";
         std::cout << "- Move camera around to hear directional audio effects\n";
         std::cout << "- Audio will be louder/quieter based on distance to triangle\n";
-        std::cout << "- Sound will pan left/right based on triangle's relative position\n\n"; // Variables for time-based animation
+        std::cout << "- Sound will pan left/right based on triangle's relative position\n\n";
+        
+        std::cout << "🧁 CUPCAKE DELIVERY GAME:\n";
+        std::cout << "- OBJECTIVE: Deliver cupcakes to houses with glowing indicators\n";
+        std::cout << "- CONTROLS: Use mouse to look around, left click to throw cupcakes\n";
+        std::cout << "- SCORING: +8 money and +5 happiness for correct deliveries\n";
+        std::cout << "- PENALTIES: -3 money and -2 happiness for wrong house deliveries\n";
+        std::cout << "- WARNING: -8 happiness for missed deliveries (timeout)\n";
+        std::cout << "- COLLISION: Avoid crashing into houses - it's game over!\n";
+        std::cout << "- SPEED: Game speed increases over time for more challenge\n";
+        std::cout << "- F5: Pause/Resume game\n\n"; // Variables for time-based animation
         auto startTime = std::chrono::high_resolution_clock::now();
 
         // Main rendering loop
@@ -1073,10 +1131,21 @@ int main()
                 frameCount = 0;
                 lastTime = currentTime;
 
-                // Update window title with FPS, VSync and Antialiasing status
+                // Update window title with FPS, VSync, Antialiasing, and Game status
+                int houseCount = cupcakeGame ? static_cast<int>(cupcakeGame->getGameState().houses.size()) : 0;
+                int money = cupcakeGame ? cupcakeGame->getGameState().money : 0;
+                int happiness = cupcakeGame ? cupcakeGame->getGameState().happiness : 0;
+                bool gameActive = cupcakeGame ? cupcakeGame->getGameState().active : true;
+                float speed = cupcakeGame ? cupcakeGame->getGameState().speed : 0.0f;
+                
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
                                     " | VSync: " + (g_vSync ? "ON" : "OFF") +
-                                    " | AA: " + (g_antialisingEnabled ? ("ON(" + std::to_string(g_antialiasingLevel) + "x)") : "OFF");
+                                    " | AA: " + (g_antialisingEnabled ? ("ON(" + std::to_string(g_antialiasingLevel) + "x)") : "OFF") +
+                                    " | 🧁 $" + std::to_string(money) + 
+                                    " | 😊" + std::to_string(happiness) + "%" +
+                                    " | Speed:" + std::to_string(static_cast<int>(speed)) + 
+                                    " | Houses:" + std::to_string(houseCount) +
+                                    (gameActive ? "" : " | 💥 GAME OVER");
                 glfwSetWindowTitle(window, title.c_str());
             } // Process camera input and update view matrix
             if (camera && cupcakeGame && cupcakeGame->getGameState().active)
@@ -1137,8 +1206,11 @@ int main()
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             }
 
-            // Update lighting system
-            if (lightingSystem) {
+            // Update lighting system (reduce frequency for better performance)
+            static float lastLightingUpdate = 0.0f;
+            const float lightingUpdateInterval = 1.0f / 30.0f; // Update at 30 FPS instead of 60+
+            
+            if (lightingSystem && (elapsedTime - lastLightingUpdate) >= lightingUpdateInterval) {
                 // Update animated lights
                 lightingSystem->updateLights(elapsedTime);
                 
@@ -1157,6 +1229,8 @@ int main()
                 
                 // Setup lighting uniforms
                 lightingSystem->setupLightUniforms(*my_shader, viewPos);
+                
+                lastLightingUpdate = elapsedTime;
             }
 
             // STEP 1: Render opaque objects first
@@ -1165,7 +1239,7 @@ int main()
             // Set view matrix (updated each frame for camera movement)
             my_shader->setUniform("uV_m", viewMatrix); 
 
-            // Triangle: Very subtle rotation around Y-axis (left object)
+            // Triangle: Very subtle rotation around Y-axis (left object) - use cupcake as fallback
             if (scene.find("triangle") != scene.end())
             {
                 glm::vec3 position(-1.5f, 0.0f, -3.0f);
@@ -1179,6 +1253,20 @@ int main()
                 
                 scene.at("triangle")->draw(position, rotation, scale);
             }
+            else if (scene.find("cupcake") != scene.end())
+            {
+                // Fallback to cupcake model if triangle isn't available
+                glm::vec3 position(-1.5f, 0.0f, -3.0f);
+                glm::vec3 rotation(0.0f, g_animationEnabled ? elapsedTime * 8.0f : 0.0f, 0.0f);
+                glm::vec3 scale(0.15f, 0.15f, 0.15f); // Smaller scale for cupcake
+                
+                // Update audio position to match visual position
+                if (audioEngine && audioEngine->isInitialized() && g_triangleSoundHandle != 0) {
+                    audioEngine->setSoundPosition(g_triangleSoundHandle, position);
+                }
+                
+                scene.at("cupcake")->draw(position, rotation, scale);
+            }
 
             // Draw road segments with road texture (direct rendering)
             if (road_shader && g_roadVAO != 0) {
@@ -1187,7 +1275,7 @@ int main()
                 // Set shared matrices
                 road_shader->setUniform("uV_m", viewMatrix);
                 road_shader->setUniform("uProj_m", projectionMatrix);
-                road_shader->setUniform("uniform_Color", glm::vec4(1.0f, 1.0f, 1.0f, 1.0f));
+                road_shader->setUniform("uniform_Color", glm::vec4(0.9f, 0.9f, 0.9f, 1.0f)); // Slightly gray for asphalt
 
                 // Bind texture and set uniforms
                 if (g_roadTex != 0) {
@@ -1202,12 +1290,14 @@ int main()
                 // Bind the road VAO
                 glBindVertexArray(g_roadVAO);
 
-                bool skippedFirst = false;
+                // Render all road segments to create continuous asphalt road
                 for (const auto& seg : cupcakeGame->getGameState().roadSegments) {
-                    if (!skippedFirst) { skippedFirst = true; continue; } // skip initial rectangle
+                    glm::vec3 pos(seg.x, -0.02f, seg.z); // Slightly below ground to avoid z-fighting
                     
-                    glm::vec3 pos(seg.x, -0.01f, seg.z);
-                    glm::vec3 scl(3.2f, 1.0f, cupcakeGame->getGameState().roadSegmentLength * 0.50f);
+                    // Make road span the full width between houses plus some margin
+                    float roadWidth = cupcakeGame->getGameState().roadSegmentWidth;
+                    float roadLength = cupcakeGame->getGameState().roadSegmentLength;
+                    glm::vec3 scl(roadWidth, 1.0f, roadLength);
 
                     // Create transformation matrix
                     glm::mat4 model = glm::mat4(1.0f);
@@ -1229,56 +1319,70 @@ int main()
                 road_shader->deactivate();
             }
 
-            // Draw houses as actual house models along the route
-            const std::vector<std::string> houseTypes = {"house", "bambo_house", "cyprys_house", "building"};
-            int houseIndex = 0;
+            // Draw houses with improved rendering and all 4 house types
+            const float cameraZ = camera ? camera->Position.z : 0.0f;
+            const float cullingDistance = 120.0f; // Render houses within range
             
             for (const auto& h : cupcakeGame->getGameState().houses) {
-                
-                // Always render a triangle first as a fallback to ensure something is visible
-                if (scene.find("triangle") != scene.end()) {
-                    glm::vec3 pos = h.position;
-                    pos.y += 3.0f; // Offset triangle above house position
-                    glm::vec3 rot(0.0f);
-                    glm::vec3 scl(0.5f, 0.5f, 0.5f); // Small triangle as marker
-                    scene.at("triangle")->draw(pos, rot, scl);
+                // Frustum culling - skip houses too far away
+                if (std::abs(h.position.z - cameraZ) > cullingDistance) {
+                    continue;
                 }
                 
-                // Cycle through different house types for variety
-                const std::string& houseType = houseTypes[houseIndex % houseTypes.size()];
+                // Get the model name from the house data (set by HouseGenerator)
+                std::string modelName = h.modelName;
+                if (modelName.empty()) {
+                    modelName = "house"; // fallback
+                }
                 
-                if (scene.find(houseType) != scene.end()) {
+                // Check if the model exists in the scene
+                if (scene.find(modelName) != scene.end()) {
                     glm::vec3 pos = h.position;
-                    glm::vec3 rot(0.0f);
+                    glm::vec3 rot(0.0f, h.id * 23.0f * (3.14159f / 180.0f), 0.0f); // Varied rotation
                     
-                    // Use appropriate scales based on model sizes (from debug output)
+                    // Set appropriate scales for different house types
                     glm::vec3 scl;
-                    if (houseType == "building") {
-                        scl = glm::vec3(0.05f, 0.05f, 0.05f); // Building might be large like house
-                    } else if (houseType == "bambo_house") {
-                        scl = glm::vec3(0.5f, 0.5f, 0.5f); // Bambo house is ~14 units, scale down
-                    } else if (houseType == "cyprys_house") {
-                        scl = glm::vec3(0.3f, 0.3f, 0.3f); // Assume similar to bambo house
+                    if (modelName == "bambo_house") {
+                        scl = glm::vec3(0.35f, 0.35f, 0.35f);
+                    } else if (modelName == "cyprys_house") {
+                        scl = glm::vec3(0.4f, 0.4f, 0.4f);
+                    } else if (modelName == "building") {
+                        scl = glm::vec3(0.25f, 0.25f, 0.25f);
                     } else { // house.obj
-                        scl = glm::vec3(0.02f, 0.02f, 0.02f); // House is ~220 units, scale way down
+                        scl = glm::vec3(0.018f, 0.018f, 0.018f);
                     }
                     
-                    // Add some variation in Y rotation for more natural look
-                    rot.y = (houseIndex * 47.0f) * (3.14159f / 180.0f); // Convert degrees to radians
-                    
-                    if (houseIndex < 1) { // Only debug first house
-                        std::cout << "Drawing house " << houseIndex << " of type " << houseType << " at position (" << pos.x << ", " << pos.y << ", " << pos.z << ")" << std::endl;
-                        std::cout << "  Scale: (" << scl.x << ", " << scl.y << ", " << scl.z << ")" << std::endl;
-                    }
-                    // Setup lighting uniforms for house shader before drawing each house
-                    if (lightingSystem && my_shader && camera) {
-                        lightingSystem->setupLightUniforms(*my_shader, camera->Position);
-                    }
-                scene.at(houseType)->draw(pos, rot, scl);
+                    scene.at(modelName)->draw(pos, rot, scl);
                 } else {
-                    std::cout << "House type " << houseType << " not found in scene!" << std::endl;
+                    // Fallback: use cupcake as placeholder if model not loaded
+                    if (scene.find("cupcake") != scene.end()) {
+                        glm::vec3 pos = h.position;
+                        pos.y += 1.0f;
+                        glm::vec3 rot(0.0f);
+                        glm::vec3 scl(0.05f, 0.05f, 0.05f);
+                        scene.at("cupcake")->draw(pos, rot, scl);
+                    }
                 }
-                houseIndex++;
+                
+                // Add visual indicator for requesting houses
+                if (h.requesting) {
+                    // Draw a cupcake indicator above the house to show it's requesting
+                    if (scene.find("cupcake") != scene.end()) {
+                        glm::vec3 indicatorPos = h.position;
+                        indicatorPos.y += h.indicatorHeight;
+                        glm::vec3 rot(0.0f, elapsedTime * 60.0f, 0.0f); // Spin the indicator for visibility
+                        glm::vec3 scl(0.12f, 0.12f, 0.12f);
+                        // Use cupcake as indicator for requesting houses
+                        scene.at("cupcake")->draw(indicatorPos, rot, scl);
+                    }
+                }
+            }
+
+            // Render cupcake projectiles using Projectile class
+            for (const auto& projectile : cupcakeGame->getGameState().projectiles) {
+                if (projectile && projectile->alive) {
+                    projectile->draw(*my_shader, viewMatrix, projectionMatrix);
+                }
             }
 
             // Place particle effects near the "active" house as a big green semi-transparent aura
@@ -1289,16 +1393,14 @@ int main()
                         glm::vec3 toCamera = glm::normalize((camera ? camera->Position : glm::vec3(0.0f)) - h.position);
                         glm::vec3 inFront = h.position + toCamera * 1.2f + glm::vec3(0.0f, h.indicatorHeight * 0.6f, 0.0f);
                         particleSystem->setEmitterPosition(inFront);
-                        // Emit more particles to make the aura dense without spreading too far
-                        for (int i = 0; i < 3; ++i) {
-                            particleSystem->emit(6);
-                        }
+                        // Reduced particle emission for better performance
+                        particleSystem->emit(4); // Reduced from 18 to 4 particles per frame
                         break;
                     }
                 }
             }
 
-            // Quad: Subtle translation up/down (center object)
+            // Quad: Subtle translation up/down (center object) - use house as fallback
             if (scene.find("quad") != scene.end())
             {
                 glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
@@ -1306,8 +1408,16 @@ int main()
                 glm::vec3 scale(g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f); // Very subtle scale
                 scene.at("quad")->draw(position, rotation, scale);
             }
+            else if (scene.find("house") != scene.end())
+            {
+                // Fallback to house model
+                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
+                glm::vec3 rotation(0.0f);
+                glm::vec3 scale(0.02f * (g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f));
+                scene.at("house")->draw(position, rotation, scale);
+            }
 
-            // Simple triangle: Subtle combined rotation (right object)
+            // Simple triangle: Subtle combined rotation (right object) - use building as fallback
             if (scene.find("simple") != scene.end())
             {
                 glm::vec3 position(1.5f, 0.0f, -3.0f);
@@ -1315,6 +1425,15 @@ int main()
                                    g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
                 glm::vec3 scale(0.8f); // Smaller scale
                 scene.at("simple")->draw(position, rotation, scale);
+            }
+            else if (scene.find("building") != scene.end())
+            {
+                // Fallback to building model
+                glm::vec3 position(1.5f, 0.0f, -3.0f);
+                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f,
+                                   g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
+                glm::vec3 scale(0.03f); // Much smaller scale for building
+                scene.at("building")->draw(position, rotation, scale);
             }
 
             // STEP 2: Render transparent objects (back-to-front order)
@@ -1383,6 +1502,12 @@ int main()
                     if (scene.find("triangle") != scene.end())
                     {
                         scene.at("triangle")->draw(animatedPos, animatedRot, obj.scale);
+                    }
+                    else if (scene.find("cupcake") != scene.end())
+                    {
+                        // Fallback to cupcake model for transparent objects
+                        glm::vec3 fallbackScale = obj.scale * 0.1f; // Much smaller since cupcake is detailed
+                        scene.at("cupcake")->draw(animatedPos, animatedRot, fallbackScale);
                     }
                 }
             }

@@ -154,11 +154,13 @@
     <ClCompile Include="OBJloader.cpp" />
     <ClCompile Include="ParticleSystem.cpp" />
     <ClCompile Include="PhysicsSystem.cpp" />
+    <ClCompile Include="Projectile.cpp" />
     <ClCompile Include="ShaderProgram.cpp" />
     <ClCompile Include="my_app.cpp" />
     <ClCompile Include="transform.cpp" />
     <ClCompile Include="TextureLoader.cpp" />
     <ClCompile Include="CupcakeGame.cpp" />
+    <ClCompile Include="HouseGenerator.cpp" />
   </ItemGroup>
   <ItemGroup>
     <None Include="app_settings.json" />
@@ -178,10 +180,12 @@
     <ClInclude Include="OBJloader.hpp" />
     <ClInclude Include="ParticleSystem.hpp" />
     <ClInclude Include="PhysicsSystem.hpp" />
+    <ClInclude Include="Projectile.hpp" />
     <ClInclude Include="ShaderProgram.hpp" />
     <ClInclude Include="teapot_vec.hpp" />
     <ClInclude Include="CupcakeGame.hpp" />
     <ClInclude Include="TextureLoader.hpp" />
+    <ClInclude Include="HouseGenerator.hpp" />
   </ItemGroup>
   <Import Project="$(VCTargetsPath)\Microsoft.Cpp.targets" />
   <ImportGroup Label="ExtensionTargets">

@@ -27,7 +27,14 @@ void ShaderProgram::setUniform(const std::string &name, const float val)
 	auto loc = glGetUniformLocation(ID, name.c_str());
 	if (loc == -1)
 	{
-		std::cerr << "no uniform with name:" << name << '\n';
+		// Suppress common lighting uniform errors to reduce log spam
+		if (name.find("pointLights") == std::string::npos && 
+		    name.find("spotLight") == std::string::npos && 
+		    name.find("material.") == std::string::npos &&
+		    name.find("dirLight") == std::string::npos &&
+		    name != "viewPos") {
+			std::cerr << "no uniform with name:" << name << '\n';
+		}
 		return;
 	}
 	glUniform1f(loc, val);
@@ -49,7 +56,14 @@ void ShaderProgram::setUniform(const std::string &name, const glm::vec3 val)
 	auto loc = glGetUniformLocation(ID, name.c_str());
 	if (loc == -1)
 	{
-		std::cerr << "no uniform with name:" << name << '\n';
+		// Suppress common lighting uniform errors to reduce log spam
+		if (name.find("pointLights") == std::string::npos && 
+		    name.find("spotLight") == std::string::npos && 
+		    name.find("material.") == std::string::npos &&
+		    name.find("dirLight") == std::string::npos &&
+		    name != "viewPos") {
+			std::cerr << "no uniform with name:" << name << '\n';
+		}
 		return;
 	}
 	glUniform3fv(loc, 1, glm::value_ptr(val));

@@ -54,7 +54,6 @@ struct SpotLight {
 
 // Uniforms
 uniform vec3 viewPos;
-uniform Material material;
 uniform DirLight dirLight;
 
 #define NR_POINT_LIGHTS 3
@@ -70,25 +69,44 @@ uniform vec3 material_specular;
 uniform float material_shininess;
 
 // Function prototypes
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir);
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
-vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir);
+vec3 CalcDirLight(DirLight light, Material material, vec3 normal, vec3 viewDir);
+vec3 CalcPointLight(PointLight light, Material material, vec3 normal, vec3 fragPos, vec3 viewDir);
+vec3 CalcSpotLight(SpotLight light, Material material, vec3 normal, vec3 fragPos, vec3 viewDir);
 
 void main()
 {
-    // Use struct if available, otherwise fallback to flat uniforms
-    vec3 ambient = material_ambient;
-    vec3 diffuse = material_diffuse;
-    vec3 specular = material_specular;
-    float shininess = material_shininess;
+    // Setup material properties for lighting calculations
+    Material material;
+    material.ambient = material_ambient;
+    material.diffuse = material_diffuse;
+    material.specular = material_specular;
+    material.shininess = material_shininess;
     
-    // Use texture if available, otherwise use diffuse color
-    vec4 baseColor = material_hasTexture ? texture(material_diffuseTex, TexCoords) : vec4(diffuse, 1.0);
-    FragColor = baseColor;
+    // Properties
+    vec3 norm = normalize(Normal);
+    vec3 viewDir = normalize(viewPos - FragPos);
+    
+    // Calculate directional lighting
+    vec3 result = CalcDirLight(dirLight, material, norm, viewDir);
+    
+    // Calculate point lights
+    for(int i = 0; i < NR_POINT_LIGHTS; i++)
+        result += CalcPointLight(pointLights[i], material, norm, FragPos, viewDir);
+    
+    // Calculate spot light
+    result += CalcSpotLight(spotLight, material, norm, FragPos, viewDir);
+    
+    // Apply texture if available
+    if(material_hasTexture) {
+        vec4 texColor = texture(material_diffuseTex, TexCoords);
+        result *= texColor.rgb;
+    }
+    
+    FragColor = vec4(result, 1.0);
 }
 
 // Calculates the color when using a directional light
-vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
+vec3 CalcDirLight(DirLight light, Material material, vec3 normal, vec3 viewDir)
 {
     vec3 lightDir = normalize(-light.direction);
     
@@ -108,7 +126,7 @@ vec3 CalcDirLight(DirLight light, vec3 normal, vec3 viewDir)
 }
 
 // Calculates the color when using a point light
-vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
+vec3 CalcPointLight(PointLight light, Material material, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     vec3 lightDir = normalize(light.position - fragPos);
     
@@ -136,7 +154,7 @@ vec3 CalcPointLight(PointLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
 }
 
 // Calculates the color when using a spot light
-vec3 CalcSpotLight(SpotLight light, vec3 normal, vec3 fragPos, vec3 viewDir)
+vec3 CalcSpotLight(SpotLight light, Material material, vec3 normal, vec3 fragPos, vec3 viewDir)
 {
     vec3 lightDir = normalize(light.position - fragPos);
     
