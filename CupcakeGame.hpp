@@ -78,6 +78,8 @@ public:
     void update(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem, PhysicsSystem* physicsSystem);
     void handleMouseClick(Camera* camera);
     GameState& getGameState() { return gameState; }
+    glm::vec3 getHouseExtents(const std::string& modelName);
+    float getIndicatorHeight(const std::string& modelName);
 
 private:
     // Main update sub-routines
@@ -89,8 +91,6 @@ private:
     // House generation methods, now part of this class
     void spawnNewHouses(float zPosition, PhysicsSystem* physicsSystem);
     std::string getRandomHouseModel();
-    glm::vec3 getHouseExtents(const std::string& modelName);
-    float getIndicatorHeight(const std::string& modelName);
 
     GameState gameState;
     std::unique_ptr<HouseGenerator> houseGenerator;
@@ -105,7 +105,5 @@ private:
     unsigned int quakeSoundHandle = 0;
     bool quakeSoundPlaying = false;
     
-    // Lua scripting - use forward declaration to avoid header dependency
-    std::unique_ptr<sol::state> lua;
     PhysicsSystem* cachedPhysicsSystem;
 };
