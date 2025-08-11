@@ -12,40 +12,29 @@
 CupcakeGame::CupcakeGame()
     : rng(std::random_device{}()), unirand(0.0f, 1.0f) {
     this->houseGenerator = std::make_unique<HouseGenerator>();
-    this->houseModels = { "house", "bambo_house", "cyprys_house", "building" };
+    this->houseModels = { "bambo_house", "cyprys_house", "building" };
     this->cachedPhysicsSystem = nullptr;
 }
 
 CupcakeGame::~CupcakeGame() {}
 
 void CupcakeGame::initialize() {
-    // Reset all game state values to their defaults
     this->gameState = GameState();
 
-    // Set the starting money and happiness
     gameState.money = 50;
     gameState.happiness = 50;
 
-    // Set up the initial road segments
-    gameState.roadSegments.clear();
     for (int i = 0; i < gameState.roadSegmentCount; ++i) {
         gameState.roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * gameState.roadSegmentLength));
     }
-
-    // The house generation loop has been REMOVED from this function.
-    gameState.houses.clear();
-
-    std::cout << "CPP_INFO: CupcakeGame state initialized." << std::endl;
 }
 
-// --- Rest of the file remains the same ---
-// (update, updateHouses, updateProjectiles, handleMouseClick, etc.)
 void CupcakeGame::update(float deltaTime, Camera* camera, AudioEngine* audioEngine,
     ParticleSystem* particleSystem, PhysicsSystem* physicsSystem) {
     if (!gameState.active) return;
     updateMovement(deltaTime, camera, physicsSystem);
     houseGenerator->updateRequests(deltaTime, this->gameState, camera);
-    updateEarthquake(deltaTime, camera, audioEngine);
+    updateEarthquake(deltaTime, camera, audioEngine, particleSystem);
     updateProjectiles(deltaTime);
     updateHouses(camera, physicsSystem);
 
@@ -67,10 +56,8 @@ void CupcakeGame::update(float deltaTime, Camera* camera, AudioEngine* audioEngi
 void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
     if (!camera) return;
 
-    // Cache the physics system pointer for other functions if needed
     this->cachedPhysicsSystem = physicsSystem;
 
-    // Recycle road segments that are behind the camera
     for (auto& seg : gameState.roadSegments) {
         if (seg.z > camera->Position.z + gameState.roadSegmentLength) {
             float minZ = seg.z;
@@ -81,15 +68,14 @@ void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
         }
     }
 
-    // Despawn houses that are far behind the camera to save resources
     gameState.houses.erase(
         std::remove_if(gameState.houses.begin(), gameState.houses.end(),
             [&](const House& h) {
-                if (h.position.z > camera->Position.z + 15.0f) {
+                if (h.position.z > camera->Position.z + gameState.roadSegmentLength) {
                     if (physicsSystem) {
                         physicsSystem->removeCollisionObject(h.position);
                     }
-                    return true; // Mark this house for removal
+                    return true;
                 }
                 return false;
             }),
@@ -176,7 +162,7 @@ void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem*
     }
 }
 
-void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine) {
+void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem) {
     if (!camera) return;
     if (gameState.quakeCooldown > 0.0f) {
         gameState.quakeCooldown -= deltaTime;
@@ -210,6 +196,22 @@ void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine*
             float shakeY = (unirand(rng) - 0.5f) * gameState.quakeAmplitude * intensity;
             float shakeZ = (unirand(rng) - 0.5f) * gameState.quakeAmplitude * intensity;
             camera->Position += glm::vec3(shakeX, shakeY, shakeZ);
+
+            if (particleSystem) {
+                for (const auto& segment : gameState.roadSegments) {
+                    float halfWidth = gameState.roadSegmentWidth * 0.5f;
+                    float halfLength = gameState.roadSegmentLength * 0.5f;
+                    
+                    glm::vec3 pos = glm::vec3(
+                        (unirand(rng) - 0.5f) * gameState.roadSegmentWidth,
+                        0.1f,
+                        segment.z + (unirand(rng) - 0.5f) * gameState.roadSegmentLength
+                    );
+
+                    particleSystem->setEmitterPosition(pos);
+                    particleSystem->emitSmoke(5);
+                }
+            }
         }
     }
 }

@@ -60,9 +60,9 @@ struct GameState {
     // Earthquake event data
     bool quakeActive = false;
     float quakeTimer = 0.0f;
-    float quakeCooldown = 25.0f;
+    float quakeCooldown = 30.0f;
     float quakeTimeLeft = 0.0f;
-    float quakeDuration = 5.0f;
+    float quakeDuration = 12.0f;
     float quakeAmplitude = 0.05f;
     glm::vec3 quakeEpicenter{0.0f};
     std::mt19937 rng{std::random_device{}()};
@@ -85,7 +85,7 @@ private:
     // Main update sub-routines
     void updateMovement(float deltaTime, Camera* camera, PhysicsSystem* physicsSystem);
     void updateProjectiles(float deltaTime);
-    void updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine);
+    void updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem = nullptr);
     void updateHouses(Camera* camera, PhysicsSystem* physicsSystem);
     
     // House generation methods, now part of this class
