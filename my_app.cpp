@@ -169,8 +169,6 @@ std::unique_ptr<ParticleSystem> particle_system;
 std::unique_ptr<PhysicsSystem> physics_system;
 std::unique_ptr<AudioEngine> audio_engine;
 
-static unsigned int g_quake_sound_handle = 0;
-static bool g_quake_sound_playing = false;
 static unsigned int g_ambient_sound_handle = 0;
 
 // VELIKOST MAPY
@@ -542,6 +540,7 @@ void init_assets()
         glm::vec3 quadPosition = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
         if (audio_engine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_ambient_sound_handle))
         {
+            audio_engine->setSoundVolume(g_ambient_sound_handle, 0.25f); // Set ambient music to 25% volume
             std::cout << "Hudba zacala na: " << quadPosition.x << ", " << quadPosition.y << ", " << quadPosition.z << std::endl;
         }
     }
@@ -1246,11 +1245,11 @@ int main()
                     // Make the indicator always appear clearly next to the house
                     if (h.position.x < 0) // dum je nalevo
                     {
-                        indicator_pos.x = h.position.x - h.half_extents.x - 4.5f; // left of house, move cupcake more to the right
+                        indicator_pos.x = h.position.x - h.half_extents.x + 20.0f;
                     }
                     else // dum je napravo
                     {
-                        indicator_pos.x = h.position.x + h.half_extents.x + 2.5f; // right of house
+                        indicator_pos.x = h.position.x + h.half_extents.x - 7.5f; // right of house
                     }
 
                     glm::vec3 indicator_scale(0.25f, 0.25f, 0.25f); // Make cupcake bigger for visibility
@@ -1360,33 +1359,26 @@ int main()
 
             if (!cupcagame->get_game_state().active)
             {
-                ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-                ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_window_width), static_cast<float>(g_window_height)));
-                ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
-                ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
-
-                float window_width = ImGui::GetWindowSize().x;
-                float window_height = ImGui::GetWindowSize().y;
-
                 bool is_game_over = cupcagame->is_game_over();
                 const char *title_text = is_game_over ? "GAME OVER" : "PAUZA";
 
-                ImVec2 title_size = ImGui::CalcTextSize(title_text);
-                ImGui::SetCursorPos(ImVec2((window_width - title_size.x) * 0.5f, window_height * 0.3f));
+                // Use the same style as the loading screen - centered window
+                ImGui::SetNextWindowPos(ImVec2(g_window_width * 0.5f, g_window_height * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+                ImGui::SetNextWindowSize(ImVec2(450.0f, 280.0f), ImGuiCond_Always);
+                ImGui::Begin(title_text, nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
+                // Title with color
                 ImVec4 title_color = is_game_over ? ImVec4(1.0f, 0.2f, 0.2f, 1.0f) : ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
                 ImGui::PushStyleColor(ImGuiCol_Text, title_color);
+
+                // Center the title text
+                ImVec2 title_size = ImGui::CalcTextSize(title_text);
+                float window_width = ImGui::GetWindowSize().x;
+                ImGui::SetCursorPosX((window_width - title_size.x) * 0.5f);
                 ImGui::Text("%s", title_text);
                 ImGui::PopStyleColor();
 
-                float content_start_y = window_height * 0.45f;
-                ImGui::SetCursorPos(ImVec2((window_width - 350) * 0.5f, content_start_y));
-
-                ImDrawList *draw_list = ImGui::GetWindowDrawList();
-                ImVec2 content_pos = ImGui::GetCursorScreenPos();
-                ImVec2 content_size(350.0f, 200.0f);
-
-                ImGui::SetCursorPos(ImVec2((window_width - 330) * 0.5f, content_start_y + 10.0f));
+                ImGui::Separator();
 
                 if (is_game_over)
                 {
@@ -1427,7 +1419,6 @@ int main()
                 ImGui::Text("ESC - Konec hry");
 
                 ImGui::End();
-                ImGui::PopStyleColor();
 
                 std::string title = g_windowTitle + (is_game_over ? " | GAME OVER" : " | PAUSED");
                 glfwSetWindowTitle(window, title.c_str());
@@ -1435,26 +1426,6 @@ int main()
 
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
-
-            if (!cupcagame->get_game_state().active)
-            {
-                glEnable(GL_SCISSOR_TEST);
-                int rw = static_cast<int>(g_window_width * 0.65f);
-                int rh = static_cast<int>(g_window_height * 0.28f);
-                int rx = (g_window_width - rw) / 2;
-                int ry = (g_window_height - rh) / 2;
-                glScissor(rx, ry, rw, rh);
-
-                glm::vec3 normal_sky_color = glm::vec3(0.55f, 0.70f, 0.95f);
-                glm::vec3 quake_sky_color = glm::vec3(0.55f, 0.55f, 0.55f);
-                glm::vec3 panel = glm::mix(quake_sky_color, normal_sky_color, 0.25f) * 0.6f;
-                glClearColor(panel.r, panel.g, panel.b, 0.55f);
-                glClear(GL_COLOR_BUFFER_BIT);
-                glDisable(GL_SCISSOR_TEST);
-
-                std::string title = g_windowTitle + " | GAME OVER";
-                glfwSetWindowTitle(window, title.c_str());
-            }
 
             glfwSwapBuffers(window);
 

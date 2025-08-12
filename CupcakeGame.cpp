@@ -310,11 +310,14 @@ void CupcakeGame::update_earthquake(float delta, Camera *camera, AudioEngine *au
         game_state.quake_time_left = game_state.quake_duration;
         game_state.quake_epicenter = camera->Position + glm::vec3(
                                                             (unirand(rng) - 0.5f) * 50.0f, 0.0f, (unirand(rng) - 0.5f) * 50.0f);
-        if (audio_engine && !quake_sound_playing)
+        std::cout << "Earthquake started! Epicenter: (" << game_state.quake_epicenter.x << ", " << game_state.quake_epicenter.y << ", " << game_state.quake_epicenter.z << ")" << std::endl;
+        if (audio_engine && !this->quake_sound_playing)
         {
-            if (audio_engine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", game_state.quake_epicenter, &quake_sound_handle))
+            if (audio_engine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", game_state.quake_epicenter, &this->quake_sound_handle))
             {
-                quake_sound_playing = true;
+                audio_engine->setSoundVolume(this->quake_sound_handle, 1.5f);
+                this->quake_sound_playing = true;
+                std::cout << "Earthquake sound started with increased volume" << std::endl;
             }
         }
     }
@@ -325,20 +328,21 @@ void CupcakeGame::update_earthquake(float delta, Camera *camera, AudioEngine *au
         {
             game_state.quake_active = false;
             game_state.quake_cooldown = 25.0f;
-            if (audio_engine && quake_sound_playing)
+            if (audio_engine && this->quake_sound_playing)
             {
-                audio_engine->stop_sound(quake_sound_handle);
-                quake_sound_playing = false;
+                audio_engine->stop_sound(this->quake_sound_handle);
+                this->quake_sound_playing = false;
+                std::cout << "Earthquake sound stopped" << std::endl;
             }
         }
         else
         {
-            float distance = glm::length(camera->Position - game_state.quake_epicenter);
-            float intensity = std::max(0.0f, 1.0f - distance / 100.0f);
-            float shake_x = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
-            float shake_y = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
-            float shake_z = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
-            camera->Position += glm::vec3(shake_x, shake_y, shake_z);
+            // Let the main loop handle camera shake via view matrix modification
+            // Just update the sound position if it's playing
+            if (audio_engine && this->quake_sound_playing)
+            {
+                audio_engine->setSoundPosition(this->quake_sound_handle, game_state.quake_epicenter);
+            }
 
             if (particle_system)
             {
