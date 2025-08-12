@@ -146,10 +146,10 @@ void saveSettings();
 
 bool g_vSync = true;
 std::string g_windowTitle = "Cupcagame";
-int g_windowWidth = 800;
-int g_windowHeight = 600;
-bool g_antialisingEnabled = false;
-int g_antialiasingLevel = 4;
+int g_window_width = 800;
+int g_window_height = 600;
+bool g_aa_enabled = false;
+int g_aa_level = 4;
 
 // INCLUDY
 
@@ -216,16 +216,11 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
     if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
-        g_antialisingEnabled = !g_antialisingEnabled;
-        std::cout << "AA switch: " << (g_antialisingEnabled ? "ON" : "OFF") << std::endl;
-        std::cout << "Level: " << g_antialiasingLevel << "x" << std::endl;
+        g_aa_enabled = !g_aa_enabled;
+        std::cout << "AA switch: " << (g_aa_enabled ? "ON" : "OFF") << std::endl;
+        std::cout << "Level: " << g_aa_level << "x" << std::endl;
 
         saveSettings();
-    }
-    if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
-    {
-        g_animationEnabled = !g_animationEnabled;
-        std::cout << "Animace: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
     }
 
     if (key == GLFW_KEY_L && action == GLFW_PRESS && lightning_system)
@@ -257,8 +252,8 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
 
 void window_resize_callback(GLFWwindow *window, int width, int height)
 {
-    g_windowWidth = width;
-    g_windowHeight = height;
+    g_window_width = width;
+    g_window_height = height;
 
     glViewport(0, 0, width, height);
 
@@ -356,17 +351,17 @@ void init_assets()
 
     physics_system->setWallHitCallback([&](const glm::vec3 &hitPoint)
                                        {
-		if (cupcagame && !cupcagame->get_game_state().active) return;
-		static auto lastPrint = std::chrono::high_resolution_clock::now();
-		static glm::vec3 lastPos(FLT_MAX);
-		auto now = std::chrono::high_resolution_clock::now();
-		float secs = std::chrono::duration<float>(now - lastPrint).count();
+            if (cupcagame && !cupcagame->get_game_state().active) return;
+            static auto lastPrint = std::chrono::high_resolution_clock::now();
+            static glm::vec3 lastPos(FLT_MAX);
+            auto now = std::chrono::high_resolution_clock::now();
+            float secs = std::chrono::duration<float>(now - lastPrint).count();
 
-		if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
-			std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
-			lastPrint = now;
-			lastPos = hitPoint;
-		} });
+            if (secs > 0.5f || glm::length(hitPoint - lastPos) > 0.75f) {
+                std::cout << "Wall hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl;
+                lastPrint = now;
+                lastPos = hitPoint;
+            } });
 
     physics_system->setObjectHitCallback([](const glm::vec3 &hitPoint)
                                          { std::cout << "Object hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl; });
@@ -443,9 +438,9 @@ void init_assets()
         std::cout << "  - " << pair.first << std::endl;
     }
 
-    if (g_windowHeight <= 0)
-        g_windowHeight = 1; // avoid division by 0
-    float ratio = static_cast<float>(g_windowWidth) / g_windowHeight;
+    if (g_window_height <= 0)
+        g_window_height = 1; // avoid division by 0
+    float ratio = static_cast<float>(g_window_width) / g_window_height;
 
     pm = glm::perspective(
         glm::radians(fov), // field of view
@@ -520,8 +515,8 @@ void validate_aa_settings(const nlohmann::json &settings)
     if (!has_aa)
     {
         std::cout << "Nenalezena nastaveni AA, pouziva se vychozi: vypnuto" << std::endl;
-        g_antialisingEnabled = false;
-        g_antialiasingLevel = 4;
+        g_aa_enabled = false;
+        g_aa_level = 4;
         return;
     }
 
@@ -529,40 +524,40 @@ void validate_aa_settings(const nlohmann::json &settings)
 
     if (aaSettings.contains("enabled") && aaSettings["enabled"].is_boolean())
     {
-        g_antialisingEnabled = aaSettings["enabled"].get<bool>();
+        g_aa_enabled = aaSettings["enabled"].get<bool>();
     }
     else
     {
         std::cerr << "Varovani: Chybne nastaveni AA 'enabled', pouziva se vychozi: false" << std::endl;
-        g_antialisingEnabled = false;
+        g_aa_enabled = false;
     }
 
     if (aaSettings.contains("level") && aaSettings["level"].is_number_integer())
     {
-        g_antialiasingLevel = aaSettings["level"].get<int>();
+        g_aa_level = aaSettings["level"].get<int>();
     }
     else
     {
         std::cerr << "Varovani: Chybne nastaveni AA 'level', pouziva se vychozi: 4" << std::endl;
-        g_antialiasingLevel = 4;
+        g_aa_level = 4;
     }
 
-    if (g_antialisingEnabled && g_antialiasingLevel <= 1)
+    if (g_aa_enabled && g_aa_level <= 1)
     {
-        std::cerr << "Varovani: AA je zapnut, ale uroven je " << g_antialiasingLevel
+        std::cerr << "Varovani: AA je zapnut, ale uroven je " << g_aa_level
                   << " (ma byt > 1). AA bude vypnut." << std::endl;
-        g_antialisingEnabled = false;
+        g_aa_enabled = false;
     }
 
-    if (g_antialiasingLevel > 8)
+    if (g_aa_level > 8)
     {
-        std::cerr << "Varovani: Uroven AA " << g_antialiasingLevel
+        std::cerr << "Varovani: Uroven AA " << g_aa_level
                   << " je prilis vysoka (maximalne doporuceno: 8). Nastavuji na 8." << std::endl;
-        g_antialiasingLevel = 8;
+        g_aa_level = 8;
     }
 
-    std::cout << "AA: " << (g_antialisingEnabled ? "zapnuto" : "vypnuto")
-              << ", Uroven: " << g_antialiasingLevel << std::endl;
+    std::cout << "AA: " << (g_aa_enabled ? "zapnuto" : "vypnuto")
+              << ", Uroven: " << g_aa_level << std::endl;
 }
 
 void saveSettings()
@@ -571,12 +566,12 @@ void saveSettings()
     {
         nlohmann::json settings;
         settings["appname"] = g_windowTitle;
-        settings["default_resolution"]["x"] = g_windowWidth;
-        settings["default_resolution"]["y"] = g_windowHeight;
+        settings["default_resolution"]["x"] = g_window_width;
+        settings["default_resolution"]["y"] = g_window_height;
         settings["vsync_enabled"] = g_vSync;
         settings["debug_mode"] = true;
-        settings["antialiasing"]["enabled"] = g_antialisingEnabled;
-        settings["antialiasing"]["level"] = g_antialiasingLevel;
+        settings["antialiasing"]["enabled"] = g_aa_enabled;
+        settings["antialiasing"]["level"] = g_aa_level;
 
         std::ofstream settingsFile("app_settings.json");
         if (settingsFile.is_open())
@@ -607,8 +602,8 @@ int main()
         if (settings["default_resolution"]["x"].is_number_integer() &&
             settings["default_resolution"]["y"].is_number_integer())
         {
-            g_windowWidth = settings["default_resolution"]["x"].get<int>();
-            g_windowHeight = settings["default_resolution"]["y"].get<int>();
+            g_window_width = settings["default_resolution"]["x"].get<int>();
+            g_window_height = settings["default_resolution"]["y"].get<int>();
         }
 
         if (settings["appname"].is_string())
@@ -622,7 +617,7 @@ int main()
         }
 
         std::cout << "Application: " << g_windowTitle << std::endl;
-        std::cout << "Initial resolution: " << g_windowWidth << "x" << g_windowHeight << std::endl;
+        std::cout << "Initial resolution: " << g_window_width << "x" << g_window_height << std::endl;
 
         if (!glfwInit())
         {
@@ -636,13 +631,13 @@ int main()
         glfwWindowHint(GLFW_OPENGL_PROFILE, GLFW_OPENGL_CORE_PROFILE);
         glfwWindowHint(GLFW_OPENGL_DEBUG_CONTEXT, GL_TRUE);
 
-        if (g_antialisingEnabled)
+        if (g_aa_enabled)
         {
-            glfwWindowHint(GLFW_SAMPLES, g_antialiasingLevel);
-            std::cout << "Multisampling s " << g_antialiasingLevel << " samply" << std::endl;
+            glfwWindowHint(GLFW_SAMPLES, g_aa_level);
+            std::cout << "Multisampling s " << g_aa_level << " samply" << std::endl;
         }
 
-        GLFWwindow *window = glfwCreateWindow(g_windowWidth, g_windowHeight, g_windowTitle.c_str(), NULL, NULL);
+        GLFWwindow *window = glfwCreateWindow(g_window_width, g_window_height, g_windowTitle.c_str(), NULL, NULL);
         if (!window)
         {
             glfwTerminate();
@@ -723,7 +718,7 @@ int main()
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
 
-            ImGui::SetNextWindowPos(ImVec2(g_windowWidth * 0.5f, g_windowHeight * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
+            ImGui::SetNextWindowPos(ImVec2(g_window_width * 0.5f, g_window_height * 0.5f), ImGuiCond_Always, ImVec2(0.5f, 0.5f));
             ImGui::SetNextWindowSize(ImVec2(600.0f, 150.0f), ImGuiCond_Always);
             ImGui::Begin("Nacitani", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoCollapse);
 
@@ -787,7 +782,7 @@ int main()
 
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
                                     " | VSync: " + (g_vSync ? "ON" : "OFF") +
-                                    " | AA: " + (g_antialisingEnabled ? ("ON(" + std::to_string(g_antialiasingLevel) + "x)") : "OFF") +
+                                    " | AA: " + (g_aa_enabled ? ("ON(" + std::to_string(g_aa_level) + "x)") : "OFF") +
                                     " | 🧁 $" + std::to_string(money) +
                                     " | 😊" + std::to_string(happiness) + "%" +
                                     " | Speed:" + std::to_string(static_cast<int>(speed)) +
@@ -838,8 +833,8 @@ int main()
             audio_engine->setListener(camera->Position, camera->Front, camera->Up);
 
             {
-                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // modra
-                glm::vec3 quakeSky = glm::vec3(0.55f, 0.55f, 0.55f);  // seda
+                glm::vec3 normal_sky_color = glm::vec3(0.55f, 0.70f, 0.95f); // modra
+                glm::vec3 quake_sky_color = glm::vec3(0.55f, 0.55f, 0.55f);  // seda
 
                 static float quakeBlend = 0.0f;
                 float target = cupcagame->get_game_state().quake_active ? 1.0f : 0.0f;
@@ -855,7 +850,7 @@ int main()
                 quakeBlend += (target - quakeBlend) * glm::clamp(rate * dtBG, 0.0f, 1.0f);
                 quakeBlend = glm::clamp(quakeBlend, 0.0f, 1.0f);
 
-                glm::vec3 bg = glm::mix(normalSky, quakeSky, quakeBlend);
+                glm::vec3 bg = glm::mix(normal_sky_color, quake_sky_color, quakeBlend);
                 glClearColor(bg.r, bg.g, bg.b, 1.0f);
                 glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
             }
@@ -971,6 +966,38 @@ int main()
 
                     scene.at(model_name)->draw(pos, rot, scl);
                 }
+
+                if (h.requesting && scene.find("cupcake") != scene.end())
+                {
+                    glm::vec3 indicator_pos = h.position + glm::vec3(0.0f, h.indicator_height, 0.0f);
+
+                    indicator_pos.y += sin(elapsedTime * 2.5f) * 0.7f;
+
+                    float x_offset = h.half_extents.x + 3.0f;
+
+                    if (h.position.x < 0) // dum je nalevo
+                    {
+                        indicator_pos.x += x_offset;
+                    }
+                    else // dum je napravo
+                    {
+                        indicator_pos.x -= x_offset;
+                    }
+
+                    glm::vec3 indicator_scale(0.2f);
+
+                    glm::mat4 cupcake_model_matrix = glm::mat4(0.6f);
+                    cupcake_model_matrix = glm::translate(cupcake_model_matrix, indicator_pos);
+                    cupcake_model_matrix = glm::rotate(cupcake_model_matrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
+                    cupcake_model_matrix = glm::scale(cupcake_model_matrix, indicator_scale);
+
+                    phong_shader->setUniform("material.diffuse", glm::vec3(1.0f, 0.95f, 0.2f));
+                    phong_shader->setUniform("material.emission", glm::vec3(2.5f, 2.3f, 0.5f));
+
+                    scene.at("cupcake")->draw(cupcake_model_matrix);
+
+                    phong_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
+                }
             }
 
             if (scene.find("cupcake") != scene.end())
@@ -982,23 +1009,6 @@ int main()
                         projectile->draw(scene.at("cupcake").get());
                     }
                 }
-            }
-
-            else if (scene.find("house") != scene.end())
-            {
-                glm::vec3 position(0.0f, g_animationEnabled ? sin(elapsedTime * 0.8f) * 0.15f : 0.0f, -3.0f);
-                glm::vec3 rotation(0.0f);
-                glm::vec3 scale(0.02f * (g_animationEnabled ? 1.0f + 0.05f * sin(elapsedTime * 1.2f) : 1.0f));
-                scene.at("house")->draw(position, rotation, scale);
-            }
-
-            if (scene.find("building") != scene.end())
-            {
-                glm::vec3 position(1.5f, 0.0f, -3.0f);
-                glm::vec3 rotation(g_animationEnabled ? elapsedTime * 6.0f : 0.0f,
-                                   g_animationEnabled ? elapsedTime * 10.0f : 0.0f, 0.0f);
-                glm::vec3 scale(0.03f); // Much smaller scale for building
-                scene.at("building")->draw(position, rotation, scale);
             }
 
             // slunce
@@ -1013,7 +1023,7 @@ int main()
                 sunPosition.y = glm::max(sunPosition.y, 20.0f);
 
                 // rotace pro efekt
-                glm::vec3 sunRotation(0.0f, g_animationEnabled ? elapsedTime * 30.0f : 0.0f, 0.0f);
+                glm::vec3 sunRotation(0.0f, elapsedTime * 30.0f, 0.0f);
                 glm::vec3 sunScale(20.0f);
 
                 phong_shader->setUniform("material.emission", glm::vec3(2.0f, 1.5f, 0.5f));
@@ -1029,33 +1039,50 @@ int main()
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
 
+            if (cupcagame && cupcagame->get_game_state().active)
+            {
+                ImGui::SetNextWindowPos(ImVec2(g_window_width - 220.0f, 10.0f), ImGuiCond_Always);
+                ImGui::SetNextWindowSize(ImVec2(210.0f, 90.0f), ImGuiCond_Always);
+                ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.1f, 0.1f, 0.15f, 0.6f));
+                ImGui::Begin("Stav hry", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove);
+
+                ImGui::Text("Penize: $%d", cupcagame->get_game_state().money);
+                ImGui::Separator();
+                ImGui::Text("Stesti: %d%%", cupcagame->get_game_state().happiness);
+                float happiness_fraction = static_cast<float>(cupcagame->get_game_state().happiness) / 100.0f;
+                ImGui::ProgressBar(happiness_fraction, ImVec2(-1.0f, 0.0f), "");
+
+                ImGui::End();
+                ImGui::PopStyleColor();
+            }
+
             if (!cupcagame->get_game_state().active)
             {
                 ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
-                ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowWidth), static_cast<float>(g_windowHeight)));
+                ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_window_width), static_cast<float>(g_window_height)));
                 ImGui::PushStyleColor(ImGuiCol_WindowBg, ImVec4(0.0f, 0.0f, 0.0f, 0.7f));
                 ImGui::Begin("GameOverOverlay", nullptr, ImGuiWindowFlags_NoTitleBar | ImGuiWindowFlags_NoResize | ImGuiWindowFlags_NoMove | ImGuiWindowFlags_NoScrollbar | ImGuiWindowFlags_NoCollapse);
 
-                float windowWidth = ImGui::GetWindowSize().x;
-                float windowHeight = ImGui::GetWindowSize().y;
+                float window_width = ImGui::GetWindowSize().x;
+                float window_height = ImGui::GetWindowSize().y;
 
-                ImVec2 titleSize = ImGui::CalcTextSize("GAME OVER");
-                ImGui::SetCursorPos(ImVec2((windowWidth - titleSize.x) * 0.5f, windowHeight * 0.3f));
+                ImVec2 title_size = ImGui::CalcTextSize("GAME OVER");
+                ImGui::SetCursorPos(ImVec2((window_width - title_size.x) * 0.5f, window_height * 0.3f));
 
                 ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
                 ImGui::Text("GAME OVER");
                 ImGui::PopStyleColor();
 
-                ImGui::SetCursorPos(ImVec2((windowWidth - 350) * 0.5f, windowHeight * 0.45f));
-                ImGui::BeginChild("GameStats", ImVec2(350.0f, 180.0f), true);
-                ImGui::Text("Final Statistics:");
+                ImGui::SetCursorPos(ImVec2((window_width - 350) * 0.5f, window_height * 0.45f));
+                ImGui::BeginChild("Statistiky hry", ImVec2(350.0f, 180.0f), true);
+                ImGui::Text("Finalni statistiky:");
                 ImGui::Separator();
-                ImGui::Text("Money Earned: $%d", cupcagame->get_game_state().money);
-                ImGui::Text("Happiness: %d%%", cupcagame->get_game_state().happiness);
+                ImGui::Text("Penize: $%d", cupcagame->get_game_state().money);
+                ImGui::Text("Stesti: %d%%", cupcagame->get_game_state().happiness);
                 ImGui::Separator();
-                ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Controls:");
-                ImGui::Text("Press F5 to restart");
-                ImGui::Text("Press ESC to quit");
+                ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Ovladani:");
+                ImGui::Text("F5 - Restart");
+                ImGui::Text("ESC - Konec hry");
                 ImGui::EndChild();
 
                 ImGui::End();
@@ -1071,19 +1098,19 @@ int main()
             if (!cupcagame->get_game_state().active)
             {
                 glEnable(GL_SCISSOR_TEST);
-                int rw = static_cast<int>(g_windowWidth * 0.65f);
-                int rh = static_cast<int>(g_windowHeight * 0.28f);
-                int rx = (g_windowWidth - rw) / 2;
-                int ry = (g_windowHeight - rh) / 2;
+                int rw = static_cast<int>(g_window_width * 0.65f);
+                int rh = static_cast<int>(g_window_height * 0.28f);
+                int rx = (g_window_width - rw) / 2;
+                int ry = (g_window_height - rh) / 2;
                 glScissor(rx, ry, rw, rh);
 
-                glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f);
-                glm::vec3 quakeSky = glm::vec3(0.55f, 0.55f, 0.55f);
-                glm::vec3 panel = glm::mix(quakeSky, normalSky, 0.25f) * 0.6f;
+                glm::vec3 normal_sky_color = glm::vec3(0.55f, 0.70f, 0.95f);
+                glm::vec3 quake_sky_color = glm::vec3(0.55f, 0.55f, 0.55f);
+                glm::vec3 panel = glm::mix(quake_sky_color, normal_sky_color, 0.25f) * 0.6f;
                 glClearColor(panel.r, panel.g, panel.b, 0.55f);
                 glClear(GL_COLOR_BUFFER_BIT);
                 glDisable(GL_SCISSOR_TEST);
-                 
+
                 std::string title = g_windowTitle + " | GAME OVER";
                 glfwSetWindowTitle(window, title.c_str());
             }
