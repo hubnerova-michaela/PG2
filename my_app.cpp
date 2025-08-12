@@ -1085,7 +1085,8 @@ int main()
                     float amp = cupcagame->get_game_state().quake_amplitude * 1.8f;
                     float ax = sin(t * 1.9f) * amp * falloff;
                     float ay = cos(t * 1.4f) * amp * 0.8f * falloff;
-                    V = glm::translate(V, glm::vec3(ax, ay, 0.0f));
+                    float az = sin(t * 2.3f) * amp * 0.5f * falloff;
+                    V = glm::translate(V, glm::vec3(ax, ay, az)); // shake in x, y, z
                 }
                 vm = V;
             }
@@ -1245,7 +1246,7 @@ int main()
                     // Make the indicator always appear clearly next to the house
                     if (h.position.x < 0) // dum je nalevo
                     {
-                        indicator_pos.x = h.position.x - h.half_extents.x - 2.5f; // left of house
+                        indicator_pos.x = h.position.x - h.half_extents.x - 4.5f; // left of house, move cupcake more to the right
                     }
                     else // dum je napravo
                     {
