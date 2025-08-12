@@ -8,7 +8,8 @@
 #include <glm/fwd.hpp>
 #include <glm/glm.hpp>
 
-struct OBJMeshData {
+struct OBJMeshData
+{
     std::vector<glm::vec3> vertices;
     std::vector<glm::vec2> uvs;
     std::vector<glm::vec3> normals;
@@ -17,11 +18,14 @@ struct OBJMeshData {
     glm::vec3 diffuse_color;
 };
 
-// Loads OBJ and returns per-mesh data (grouped by material)
 bool loadOBJMeshes(
-    const char* path,
-    std::vector<OBJMeshData>& out_meshes,
-    std::string* out_texture_path = nullptr
-);
+    const char *path,
+    std::vector<OBJMeshData> &out_meshes,
+    std::string *out_texture_path = nullptr);
+
+bool loadOBJ(const char *path, std::vector<glm::vec3> &out_vertices,
+             std::vector<glm::vec2> &out_uvs, std::vector<glm::vec3> &out_normals);
+
+std::vector<std::string> split(const std::string &s, char delimiter);
 
 #endif

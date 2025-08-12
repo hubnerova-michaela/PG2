@@ -41,77 +41,80 @@ struct vertex
     glm::vec3 position;
 };
 
-static GLuint g_roadVAO = 0;
-static GLuint g_roadVBO = 0;
-static GLuint g_roadEBO = 0;
+static GLuint g_road_vao = 0;
+static GLuint g_road_vbo = 0;
+static GLuint g_road_ebo = 0;
 
 // const std::vector<std::string> HOUSE_MODELS = { "bambo_house", "cyprys_house", "building" };
 const std::vector<std::string> HOUSE_MODELS = {"bambo_house"};
 
 void spawn_new_houses(CupcakeGame &game, PhysicsSystem &physics, float zPosition)
 {
-    // --- Generation Parameters ---
     static std::mt19937 rng(std::random_device{}());
     static std::uniform_real_distribution<float> dist(0.0f, 1.0f);
     const float house_side_offset = 10.0f;
-    const float emptyPlotProbability = 0.2f;
+    const float empty_plot_probability = 0.2f;
 
-    if (dist(rng) > emptyPlotProbability)
+    // leva strana
+    if (dist(rng) > empty_plot_probability)
     {
         House house;
-        house.id = game.getGameState().nextHouseId++;
-        house.modelName = HOUSE_MODELS[rng() % HOUSE_MODELS.size()]; // Pick a random model
-        house.position = glm::vec3(-house_side_offset, 0.0f, zPosition);
-        house.halfExtents = game.getHouseExtents(house.modelName);
-        house.indicatorHeight = game.getIndicatorHeight(house.modelName);
+        house.id = game.get_game_state().next_house_id++;
+        house.modelName = HOUSE_MODELS[rng() % HOUSE_MODELS.size()]; // nahodny dum
+        house.position = glm::vec3(-house_side_offset - 10.0f, 0.0f, zPosition);
+        house.half_extents = game.get_house_extents(house.modelName);
+        house.indicator_height = game.get_indicator_height(house.modelName);
 
-        game.getGameState().houses.push_back(house);
-        physics.addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+        game.get_game_state().houses.push_back(house);
+        physics.addCollisionObject({CollisionType::BOX, house.position, house.half_extents});
     }
 
-    if (dist(rng) > emptyPlotProbability)
+    // prava strana
+    if (dist(rng) > empty_plot_probability)
     {
         House house;
-        house.id = game.getGameState().nextHouseId++;
-        house.modelName = HOUSE_MODELS[rng() % HOUSE_MODELS.size()]; // Pick a random model
+        house.id = game.get_game_state().next_house_id++;
+        house.modelName = HOUSE_MODELS[rng() % HOUSE_MODELS.size()]; // nahodny dum
         house.position = glm::vec3(house_side_offset, 0.0f, zPosition);
-        house.halfExtents = game.getHouseExtents(house.modelName);
-        house.indicatorHeight = game.getIndicatorHeight(house.modelName);
+        house.half_extents = game.get_house_extents(house.modelName);
+        house.indicator_height = game.get_indicator_height(house.modelName);
 
-        game.getGameState().houses.push_back(house);
-        physics.addCollisionObject({CollisionType::BOX, house.position, house.halfExtents});
+        game.get_game_state().houses.push_back(house);
+        physics.addCollisionObject({CollisionType::BOX, house.position, house.half_extents});
     }
 }
 
 void initRoadGeometry()
 {
-    float roadVertices[] = {
+    float road_vertices[] = {
         -1.0f, 0.0f, -1.0f, 0.0f, 0.0f, // bottom left
         1.0f, 0.0f, -1.0f, 2.0f, 0.0f,  // bottom right (increased U coord for tiling)
         1.0f, 0.0f, 1.0f, 2.0f, 2.0f,   // top right
         -1.0f, 0.0f, 1.0f, 0.0f, 2.0f   // top left
     };
 
-    unsigned int roadIndices[] = {
-        0, 1, 2, // first triangle
-        0, 2, 3  // second triangle
+    unsigned int road_indices[] = {
+        0, 1, 2, // prvni trojuhelnik
+        0, 2, 3  // druhy trojuhelnik
     };
 
-    glGenVertexArrays(1, &g_roadVAO);
-    glGenBuffers(1, &g_roadVBO);
-    glGenBuffers(1, &g_roadEBO);
+    glGenVertexArrays(1, &g_road_vao);
+    glGenBuffers(1, &g_road_vbo);
+    glGenBuffers(1, &g_road_ebo);
 
-    glBindVertexArray(g_roadVAO);
+    glBindVertexArray(g_road_vao);
 
-    glBindBuffer(GL_ARRAY_BUFFER, g_roadVBO);
-    glBufferData(GL_ARRAY_BUFFER, sizeof(roadVertices), roadVertices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ARRAY_BUFFER, g_road_vbo);
+    glBufferData(GL_ARRAY_BUFFER, sizeof(road_vertices), road_vertices, GL_STATIC_DRAW);
 
-    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_roadEBO);
-    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(roadIndices), roadIndices, GL_STATIC_DRAW);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, g_road_ebo);
+    glBufferData(GL_ELEMENT_ARRAY_BUFFER, sizeof(road_indices), road_indices, GL_STATIC_DRAW);
 
+    // pozice
     glVertexAttribPointer(0, 3, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)0);
     glEnableVertexAttribArray(0);
 
+    // textura
     glVertexAttribPointer(2, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), (void *)(3 * sizeof(float)));
     glEnableVertexAttribArray(2);
 
@@ -120,20 +123,20 @@ void initRoadGeometry()
 
 void cleanupRoadGeometry()
 {
-    if (g_roadVAO != 0)
+    if (g_road_vao != 0)
     {
-        glDeleteVertexArrays(1, &g_roadVAO);
-        g_roadVAO = 0;
+        glDeleteVertexArrays(1, &g_road_vao);
+        g_road_vao = 0;
     }
-    if (g_roadVBO != 0)
+    if (g_road_vbo != 0)
     {
-        glDeleteBuffers(1, &g_roadVBO);
-        g_roadVBO = 0;
+        glDeleteBuffers(1, &g_road_vbo);
+        g_road_vbo = 0;
     }
-    if (g_roadEBO != 0)
+    if (g_road_ebo != 0)
     {
-        glDeleteBuffers(1, &g_roadEBO);
-        g_roadEBO = 0;
+        glDeleteBuffers(1, &g_road_ebo);
+        g_road_ebo = 0;
     }
 }
 
@@ -158,14 +161,13 @@ std::unique_ptr<ParticleSystem> particle_system;
 std::unique_ptr<PhysicsSystem> physics_system;
 std::unique_ptr<AudioEngine> audio_engine;
 
-static unsigned int g_quakeSoundHandle = 0;
-static bool g_quakeSoundPlaying = false;
-static unsigned int g_triangleSoundHandle = 0;
-
+static unsigned int g_quake_sound_handle = 0;
+static bool g_quake_sound_playing = false;
+static unsigned int g_ambient_sound_handle = 0;
 
 // VELIKOST MAPY
-static glm::vec3 g_worldMin(-100.0f, -5.0f, -100.0f);
-static glm::vec3 g_worldMax(100.0f, 100.0f, 100.0f);
+static glm::vec3 g_world_min(-100.0f, -5.0f, -100.0f);
+static glm::vec3 g_world_max(100.0f, 100.0f, 100.0f);
 
 std::unordered_map<std::string, std::unique_ptr<Model>> scene;
 GLfloat r = 1.0f, g = 0.0f, b = 0.0f, a = 1.0f;
@@ -215,7 +217,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_F11 && action == GLFW_PRESS)
     {
         g_antialisingEnabled = !g_antialisingEnabled;
-        std::cout << "Antialiasing toggle requested: " << (g_antialisingEnabled ? "ON" : "OFF") << std::endl;
+        std::cout << "AA switch: " << (g_antialisingEnabled ? "ON" : "OFF") << std::endl;
         std::cout << "Level: " << g_antialiasingLevel << "x" << std::endl;
 
         saveSettings();
@@ -223,7 +225,7 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_SPACE && action == GLFW_PRESS)
     {
         g_animationEnabled = !g_animationEnabled;
-        std::cout << "Animation: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
+        std::cout << "Animace: " << (g_animationEnabled ? "ON" : "OFF") << std::endl;
     }
 
     if (key == GLFW_KEY_L && action == GLFW_PRESS && lightning_system)
@@ -240,15 +242,15 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             lightning_system->spotLight.diffuse = glm::vec3(0.0f, 0.0f, 0.0f);
             lightning_system->spotLight.specular = glm::vec3(0.0f, 0.0f, 0.0f);
         }
-        std::cout << "Spot light: " << (spotLightOn ? "ON" : "OFF") << std::endl;
+        std::cout << "Svetlo: " << (spotLightOn ? "ON" : "OFF") << std::endl;
     }
 
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS)
     {
         if (cupcagame)
         {
-            cupcagame->getGameState().active = !cupcagame->getGameState().active;
-            std::cout << "Cupcake game: " << (cupcagame->getGameState().active ? "ACTIVE" : "PAUSED") << std::endl;
+            cupcagame->get_game_state().active = !cupcagame->get_game_state().active;
+            std::cout << "Cupcagame: " << (cupcagame->get_game_state().active ? "Aktivni" : "Pauznuty") << std::endl;
         }
     }
 }
@@ -261,7 +263,7 @@ void window_resize_callback(GLFWwindow *window, int width, int height)
     glViewport(0, 0, width, height);
 
     if (height <= 0)
-        height = 1; // avoid division by 0
+        height = 1;
     float ratio = static_cast<float>(width) / height;
 
     pm = glm::perspective(
@@ -287,7 +289,7 @@ void mouse_button_callback(GLFWwindow *window, int button, int action, int mods)
     {
         if (cupcagame)
         {
-            cupcagame->handleMouseClick(camera.get());
+            cupcagame->handle_mouse_click(camera.get());
         }
     }
 }
@@ -313,7 +315,7 @@ void cursor_position_callback(GLFWwindow *window, double xpos, double ypos)
 
     camera->ProcessMouseMovement(static_cast<GLfloat>(xoffset), static_cast<GLfloat>(yoffset));
 
-    if (cupcagame && cupcagame->getGameState().active)
+    if (cupcagame && cupcagame->get_game_state().active)
     {
         const float steeringSensitivity = 0.01f;
         const float maxSteeringSpeed = 15.0f;
@@ -348,13 +350,13 @@ void init_assets()
     lightning_system = std::make_unique<LightingSystem>();
     physics_system = std::make_unique<PhysicsSystem>();
 
-    g_worldMin = glm::vec3(-100.0f, -5.0f, -300.0f);
-    g_worldMax = glm::vec3(100.0f, 100.0f, 100.0f);
-    physics_system->setWorldBounds(g_worldMin, g_worldMax);
+    g_world_min = glm::vec3(-100.0f, -5.0f, -300.0f);
+    g_world_max = glm::vec3(100.0f, 100.0f, 100.0f);
+    physics_system->setWorldBounds(g_world_min, g_world_max);
 
     physics_system->setWallHitCallback([&](const glm::vec3 &hitPoint)
                                        {
-		if (cupcagame && !cupcagame->getGameState().active) return;
+		if (cupcagame && !cupcagame->get_game_state().active) return;
 		static auto lastPrint = std::chrono::high_resolution_clock::now();
 		static glm::vec3 lastPos(FLT_MAX);
 		auto now = std::chrono::high_resolution_clock::now();
@@ -370,7 +372,7 @@ void init_assets()
                                          { std::cout << "Object hit at: (" << hitPoint.x << ", " << hitPoint.y << ", " << hitPoint.z << ")" << std::endl; });
 
     particle_system = std::make_unique<ParticleSystem>(*particle_shader, 1000);
-    particle_system->setEmitterPosition(glm::vec3(0.0f, 10.0f, -5.0f));
+    particle_system->set_emitter_position(glm::vec3(0.0f, 10.0f, -5.0f));
 
     audio_engine = std::make_unique<AudioEngine>();
 
@@ -387,17 +389,16 @@ void init_assets()
         }
         catch (const std::exception &e)
         {
-			throw std::runtime_error("Nepodarilo se nacist texturu '" + texPath.string() + "': " + e.what());
+            throw std::runtime_error("Nepodarilo se nacist texturu '" + texPath.string() + "': " + e.what());
             g_roadTex = 0;
         }
-
     }
 
     if (audio_engine->init())
     {
         std::cout << "Audio engine inicializovan" << std::endl;
         glm::vec3 quadPosition(0.0f, 0.0f, -3.0f);
-        if (audio_engine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_triangleSoundHandle))
+        if (audio_engine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_ambient_sound_handle))
         {
             std::cout << "Hudba zacala na: " << quadPosition.x << ", " << quadPosition.y << ", " << quadPosition.z << std::endl;
         }
@@ -436,7 +437,7 @@ void init_assets()
         }
     }
 
-    std::cout << "Scena obsahuj " << scene.size() << " modely:" << std::endl;
+    std::cout << "Scena obsahuje " << scene.size() << " modely:" << std::endl;
     for (const auto &pair : scene)
     {
         std::cout << "  - " << pair.first << std::endl;
@@ -458,7 +459,7 @@ void init_assets()
         glm::vec3(0.0f, 1.0f, 0.0f)   // up vektor
     );
 
-	// inicializace kamery na stejne pozici jako viewMatrix
+    // inicializace kamery na stejne pozici jako viewMatrix
     camera = std::make_unique<Camera>(glm::vec3(0.0f, 2.0f, 5.0f));
     camera->MovementSpeed = 2.5f;
     camera->MouseSensitivity = 0.1f;
@@ -475,10 +476,10 @@ void init_assets()
         firstMouse = true;
     }
 
-    cupcagame->getGameState().roadSegments.clear();
-    for (int i = 0; i < cupcagame->getGameState().roadSegmentCount; ++i)
+    cupcagame->get_game_state().road_segments.clear();
+    for (int i = 0; i < cupcagame->get_game_state().road_segment_count; ++i)
     {
-        cupcagame->getGameState().roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * cupcagame->getGameState().roadSegmentLength));
+        cupcagame->get_game_state().road_segments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * cupcagame->get_game_state().road_segment_length));
     }
 
     phong_shader->activate();
@@ -733,7 +734,7 @@ int main()
             ImGui::Text("Kdyz budes strilet cupcaky na vsechny domy, dojdou ti penize.");
             ImGui::Text("Kdyz nebudes strilet cupcaky na domy, ktere je chteji, dojde ti stesti.");
             ImGui::Separator();
-			ImGui::Text("A nezapomen na to, ze cupcake je nejlepsi!");
+            ImGui::Text("A nezapomen na to, ze cupcake je nejlepsi!");
 
             ImGui::End();
 
@@ -750,7 +751,7 @@ int main()
             for (int i = 0; i < 20; ++i)
             {
                 spawn_new_houses(*cupcagame, *physics_system, z);
-                z -= cupcagame->getGameState().houseSpacing;
+                z -= cupcagame->get_game_state().house_spacing;
             }
         }
 
@@ -778,11 +779,11 @@ int main()
                 frameCount = 0;
                 lastTime = currentTime;
 
-                int houseCount = cupcagame ? static_cast<int>(cupcagame->getGameState().houses.size()) : 0;
-                int money = cupcagame ? cupcagame->getGameState().money : 0;
-                int happiness = cupcagame ? cupcagame->getGameState().happiness : 0;
-                bool gameActive = cupcagame ? cupcagame->getGameState().active : true;
-                float speed = cupcagame ? cupcagame->getGameState().speed : 0.0f;
+                int houseCount = cupcagame ? static_cast<int>(cupcagame->get_game_state().houses.size()) : 0;
+                int money = cupcagame ? cupcagame->get_game_state().money : 0;
+                int happiness = cupcagame ? cupcagame->get_game_state().happiness : 0;
+                bool gameActive = cupcagame ? cupcagame->get_game_state().active : true;
+                float speed = cupcagame ? cupcagame->get_game_state().speed : 0.0f;
 
                 std::string title = g_windowTitle + " | FPS: " + std::to_string(static_cast<int>(fps)) +
                                     " | VSync: " + (g_vSync ? "ON" : "OFF") +
@@ -794,7 +795,7 @@ int main()
                                     (gameActive ? "" : " | 💥 GAME OVER");
                 glfwSetWindowTitle(window, title.c_str());
             }
-            if (camera && cupcagame && cupcagame->getGameState().active)
+            if (camera && cupcagame && cupcagame->get_game_state().active)
             {
                 static auto lastFrameTime = currentTime;
                 float deltaTime = std::chrono::duration<float>(currentTime - lastFrameTime).count();
@@ -804,29 +805,29 @@ int main()
 
                 {
                     float farthestZ = camera->Position.z;
-                    for (const auto &h : cupcagame->getGameState().houses)
+                    for (const auto &h : cupcagame->get_game_state().houses)
                     {
                         farthestZ = std::min(farthestZ, h.position.z);
                     }
 
                     // generovani novych domu, pokud je kamera blizko k nejzazsimu domu
-                    if (camera->Position.z - farthestZ < 200.0f)
+                    if (camera->Position.z - farthestZ < 100.0f)
                     {
-                        float newZ = farthestZ - cupcagame->getGameState().houseSpacing;
+                        float newZ = farthestZ - cupcagame->get_game_state().house_spacing;
                         spawn_new_houses(*cupcagame, *physics_system, newZ);
                     }
                 }
 
                 // aktualizace view matice se zemetresenim
                 glm::mat4 V = camera->GetViewMatrix();
-                if (cupcagame->getGameState().quakeActive)
+                if (cupcagame->get_game_state().quake_active)
                 {
                     // efekt zemetreseni, zameren podle epicentra zemetreseni
-                    float dist = glm::length((camera ? camera->Position : glm::vec3(0.0f)) - cupcagame->getGameState().quakeEpicenter);
+                    float dist = glm::length((camera ? camera->Position : glm::vec3(0.0f)) - cupcagame->get_game_state().quake_epicenter);
                     float k = 10.0f;
                     float falloff = 1.0f / (1.0f + dist / k);
                     float t = elapsedTime * 22.0f;
-                    float amp = cupcagame->getGameState().quakeAmplitude * 1.8f;
+                    float amp = cupcagame->get_game_state().quake_amplitude * 1.8f;
                     float ax = sin(t * 1.9f) * amp * falloff;
                     float ay = cos(t * 1.4f) * amp * 0.8f * falloff;
                     V = glm::translate(V, glm::vec3(ax, ay, 0.0f));
@@ -838,10 +839,10 @@ int main()
 
             {
                 glm::vec3 normalSky = glm::vec3(0.55f, 0.70f, 0.95f); // modra
-                glm::vec3 quakeSky = glm::vec3(0.55f, 0.55f, 0.55f); // seda
+                glm::vec3 quakeSky = glm::vec3(0.55f, 0.55f, 0.55f);  // seda
 
                 static float quakeBlend = 0.0f;
-                float target = cupcagame->getGameState().quakeActive ? 1.0f : 0.0f;
+                float target = cupcagame->get_game_state().quake_active ? 1.0f : 0.0f;
                 float easeInRate = 2.5f;
                 float easeOutRate = 1.5f;
 
@@ -888,7 +889,7 @@ int main()
 
             phong_shader->setUniform("uV_m", vm);
 
-            if (road_shader && g_roadVAO != 0)
+            if (road_shader && g_road_vao != 0)
             {
                 road_shader->activate();
 
@@ -908,15 +909,15 @@ int main()
                     road_shader->setUniform("useTexture", false);
                 }
 
-                glBindVertexArray(g_roadVAO);
+                glBindVertexArray(g_road_vao);
 
-                for (const auto &seg : cupcagame->getGameState().roadSegments)
+                for (const auto &seg : cupcagame->get_game_state().road_segments)
                 {
                     // segment silnice pod kamerou (z-fighting)
                     glm::vec3 pos(seg.x, -0.02f, seg.z);
 
-                    float roadWidth = cupcagame->getGameState().roadSegmentWidth;
-                    float roadLength = cupcagame->getGameState().roadSegmentLength;
+                    float roadWidth = cupcagame->get_game_state().road_segment_width;
+                    float roadLength = cupcagame->get_game_state().road_segment_length;
                     glm::vec3 scl(roadWidth, 1.0f, roadLength);
 
                     glm::mat4 model = glm::mat4(1.0f);
@@ -940,41 +941,41 @@ int main()
             // renderovani domu ve scene
             const float cullingDistance = 120.0f;
 
-            for (const auto &h : cupcagame->getGameState().houses)
+            for (const auto &h : cupcagame->get_game_state().houses)
             {
                 // vyber modelu podle typu modelu
-                std::string modelName = h.modelName;
-                if (modelName.empty())
+                std::string model_name = h.modelName;
+                if (model_name.empty())
                 {
-                    modelName = "bambo_house"; // vychoze bambo_house
+                    model_name = "bambo_house"; // vychoze bambo_house
                 }
 
-                if (scene.find(modelName) != scene.end())
+                if (scene.find(model_name) != scene.end())
                 {
                     glm::vec3 pos = h.position;
                     glm::vec3 rot(0.0f);
                     glm::vec3 scl(1.0f);
 
-                    if (modelName == "bambo_house")
+                    if (model_name == "bambo_house")
                     {
                         scl = glm::vec3(2.0f);
                     }
-                    else if (modelName == "cyprys_house")
+                    else if (model_name == "cyprys_house")
                     {
                         scl = glm::vec3(2.5f);
                     }
-                    else if (modelName == "building")
+                    else if (model_name == "building")
                     {
                         scl = glm::vec3(1.5f);
                     }
 
-                    scene.at(modelName)->draw(pos, rot, scl);
+                    scene.at(model_name)->draw(pos, rot, scl);
                 }
             }
 
             if (scene.find("cupcake") != scene.end())
             {
-                for (const auto &projectile : cupcagame->getGameState().projectiles)
+                for (const auto &projectile : cupcagame->get_game_state().projectiles)
                 {
                     if (projectile && projectile->alive)
                     {
@@ -1028,7 +1029,7 @@ int main()
             ImGui_ImplGlfw_NewFrame();
             ImGui::NewFrame();
 
-            if (!cupcagame->getGameState().active)
+            if (!cupcagame->get_game_state().active)
             {
                 ImGui::SetNextWindowPos(ImVec2(0.0f, 0.0f));
                 ImGui::SetNextWindowSize(ImVec2(static_cast<float>(g_windowWidth), static_cast<float>(g_windowHeight)));
@@ -1049,8 +1050,8 @@ int main()
                 ImGui::BeginChild("GameStats", ImVec2(350.0f, 180.0f), true);
                 ImGui::Text("Final Statistics:");
                 ImGui::Separator();
-                ImGui::Text("Money Earned: $%d", cupcagame->getGameState().money);
-                ImGui::Text("Happiness: %d%%", cupcagame->getGameState().happiness);
+                ImGui::Text("Money Earned: $%d", cupcagame->get_game_state().money);
+                ImGui::Text("Happiness: %d%%", cupcagame->get_game_state().happiness);
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Controls:");
                 ImGui::Text("Press F5 to restart");
@@ -1067,7 +1068,7 @@ int main()
             ImGui::Render();
             ImGui_ImplOpenGL3_RenderDrawData(ImGui::GetDrawData());
 
-            if (!cupcagame->getGameState().active)
+            if (!cupcagame->get_game_state().active)
             {
                 glEnable(GL_SCISSOR_TEST);
                 int rw = static_cast<int>(g_windowWidth * 0.65f);
@@ -1082,7 +1083,7 @@ int main()
                 glClearColor(panel.r, panel.g, panel.b, 0.55f);
                 glClear(GL_COLOR_BUFFER_BIT);
                 glDisable(GL_SCISSOR_TEST);
-
+                 
                 std::string title = g_windowTitle + " | GAME OVER";
                 glfwSetWindowTitle(window, title.c_str());
             }

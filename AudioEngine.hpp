@@ -27,7 +27,7 @@ public:
     bool playLoop3D(const std::string& filepath, const glm::vec3& position, unsigned int* handle = nullptr);
     void setSoundPosition(unsigned int handle, const glm::vec3& position);
     void playOneShot3D(const std::string& filepath, const glm::vec3& position);
-    void stopSound(unsigned int handle);
+    void stop_sound(unsigned int handle);
     
     // Utility
     bool isInitialized() const;

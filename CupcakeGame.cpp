@@ -11,41 +11,69 @@
 
 CupcakeGame::CupcakeGame()
     : rng(std::random_device{}()), unirand(0.0f, 1.0f) {
-    this->houseGenerator = std::make_unique<HouseGenerator>();
-    this->houseModels = { "bambo_house", "cyprys_house", "building" };
-    this->cachedPhysicsSystem = nullptr;
+    this->house_generator = std::make_unique<HouseGenerator>();
+    this->house_models = { "bambo_house", "cyprys_house", "building" };
+    this->cached_physics_system = nullptr;
 }
 
 CupcakeGame::~CupcakeGame() {}
 
 void CupcakeGame::initialize() {
-    this->gameState = GameState();
+    this->game_state = GameState();
 
-    gameState.money = 50;
-    gameState.happiness = 50;
+    game_state.money = 50;
+    game_state.happiness = 50;
 
-    for (int i = 0; i < gameState.roadSegmentCount; ++i) {
-        gameState.roadSegments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * gameState.roadSegmentLength));
+    for (int i = 0; i < game_state.road_segment_count; ++i) {
+        game_state.road_segments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * game_state.road_segment_length));
     }
 }
 
-void CupcakeGame::update(float deltaTime, Camera* camera, AudioEngine* audioEngine,
-    ParticleSystem* particleSystem, PhysicsSystem* physicsSystem) {
-    if (!gameState.active) return;
-    updateMovement(deltaTime, camera, physicsSystem);
-    houseGenerator->updateRequests(deltaTime, this->gameState, camera);
-    updateEarthquake(deltaTime, camera, audioEngine, particleSystem);
-    updateProjectiles(deltaTime);
-    updateHouses(camera, physicsSystem);
+glm::vec3 CupcakeGame::calculate_movement(float delta, Camera* camera, PhysicsSystem* physics_system) {
+    if (!camera || !game_state.active) {
+        return glm::vec3(0.0f);
+    }
 
-    if (particleSystem) {
-        for (auto& house : gameState.houses) {
-            if (house.deliveryEffectTimer > 0.0f) {
-                house.deliveryEffectTimer -= deltaTime;
-                glm::vec3 emitterPos = house.position + glm::vec3(0.0f, house.indicatorHeight * 0.7f, 0.0f);
-                particleSystem->setEmitterPosition(emitterPos);
-                particleSystem->emit(2);
-                if (house.deliveryEffectTimer <= 0.0f) {
+    float moveSpeed = game_state.speed * delta;
+    glm::vec3 world_movement = glm::vec3(0.0f, 0.0f, moveSpeed);
+
+    return world_movement;
+}
+
+void CupcakeGame::update(float delta, Camera* camera, AudioEngine* audio_engine,
+    ParticleSystem* particle_system, PhysicsSystem* physics_system) {
+    if (!game_state.active) return;
+
+    glm::vec3 world_movement = calculate_movement(delta, camera, physics_system);
+
+    for (auto& house : game_state.houses) {
+        house.position += world_movement;
+    }
+    for (auto& seg : game_state.road_segments) {
+        seg += world_movement;
+    }
+    for (auto& projectile : game_state.projectiles) {
+        if (projectile) {
+            projectile->position += world_movement;
+        }
+    }
+    if (game_state.quake_active) {
+        game_state.quake_epicenter += world_movement;
+    }
+
+    house_generator->updateRequests(delta, this->game_state, camera);
+    update_earthquake(delta, camera, audio_engine, particle_system);
+    update_projectiles(delta);
+    update_houses(camera, physics_system);
+
+    if (particle_system) {
+        for (auto& house : game_state.houses) {
+            if (house.delivery_effect_timer > 0.0f) {
+                house.delivery_effect_timer -= delta;
+                glm::vec3 emitterPos = house.position + glm::vec3(0.0f, house.indicator_height * 0.7f, 0.0f);
+                particle_system->set_emitter_position(emitterPos);
+                particle_system->emit(2);
+                if (house.delivery_effect_timer <= 0.0f) {
                     house.delivered = false;
                 }
             }
@@ -53,108 +81,107 @@ void CupcakeGame::update(float deltaTime, Camera* camera, AudioEngine* audioEngi
     }
 }
 
-void CupcakeGame::updateHouses(Camera* camera, PhysicsSystem* physicsSystem) {
+void CupcakeGame::update_houses(Camera* camera, PhysicsSystem* physics_system) {
     if (!camera) return;
 
-    this->cachedPhysicsSystem = physicsSystem;
+    this->cached_physics_system = physics_system;
 
-    for (auto& seg : gameState.roadSegments) {
-        if (seg.z > camera->Position.z + gameState.roadSegmentLength) {
-            float minZ = seg.z;
-            for (auto& s2 : gameState.roadSegments) {
+    const float road_recycle_z = camera->Position.z + 20.0f;
+
+    for (auto& seg : game_state.road_segments) {
+        if (seg.z > road_recycle_z) {
+            float minZ = 0.0f;
+            for (const auto& s2 : game_state.road_segments) {
                 minZ = std::min(minZ, s2.z);
             }
-            seg.z = minZ - gameState.roadSegmentLength;
+            seg.z = minZ - game_state.road_segment_length;
         }
     }
 
-    gameState.houses.erase(
-        std::remove_if(gameState.houses.begin(), gameState.houses.end(),
-            [&](const House& h) {
-                if (h.position.z > camera->Position.z + gameState.roadSegmentLength) {
-                    if (physicsSystem) {
-                        physicsSystem->removeCollisionObject(h.position);
-                    }
-                    return true;
-                }
-                return false;
-            }),
-        gameState.houses.end()
+    const float house_removal_z = camera->Position.z + 30.0f;
+
+    auto removal_begin_it = std::remove_if(
+        game_state.houses.begin(), game_state.houses.end(),
+        [&](const House& h) {
+            return h.position.z > house_removal_z;
+        }
     );
+
+    if (physics_system) {
+        for (auto it = removal_begin_it; it != game_state.houses.end(); ++it) {
+            physics_system->remove_collision_object(it->position);
+        }
+    }
+
+    game_state.houses.erase(removal_begin_it, game_state.houses.end());
 }
 
-void CupcakeGame::handleMouseClick(Camera* camera) {
-    if (!camera || !gameState.active) return;
-    gameState.money -= 10;
-    glm::vec3 projectilePos = camera->Position + camera->Front * 2.0f;
-    glm::vec3 projectileVel = camera->Front * 50.0f;
-    auto projectile = std::make_unique<Projectile>(projectilePos, projectileVel, 0.3f);
-    gameState.projectiles.push_back(std::move(projectile));
+void CupcakeGame::handle_mouse_click(Camera* camera) {
+    if (!camera || !game_state.active) return;
+    game_state.money -= 10;
+    glm::vec3 projectile_position = camera->Position + camera->Front * 2.0f;
+    glm::vec3 projectile_velocity = camera->Front * 50.0f;
+    auto projectile = std::make_unique<Projectile>(projectile_position, projectile_velocity, 0.3f);
+    game_state.projectiles.push_back(std::move(projectile));
 }
 
-void CupcakeGame::updateProjectiles(float deltaTime) {
-    for (auto& projectile : gameState.projectiles) {
+void CupcakeGame::update_projectiles(float deltaTime) {
+    for (auto& projectile : game_state.projectiles) {
         if (!projectile || !projectile->alive) continue;
         projectile->update(deltaTime);
-        for (auto& house : gameState.houses) {
+        for (auto& house : game_state.houses) {
             if (house.delivered) continue;
-            glm::vec3 boxMin = house.position - house.halfExtents;
-            glm::vec3 boxMax = house.position + house.halfExtents;
+            glm::vec3 boxMin = house.position - house.half_extents;
+            glm::vec3 boxMax = house.position + house.half_extents;
             glm::vec3 closestPoint = glm::clamp(projectile->position, boxMin, boxMax);
             float distanceSq = glm::distance2(projectile->position, closestPoint);
             if (distanceSq < (projectile->radius * projectile->radius)) {
                 projectile->alive = false;
                 if (house.requesting) {
-                    gameState.money += 20;
-                    gameState.happiness = std::min(100, gameState.happiness + 10);
+                    game_state.money += 20;
+                    game_state.happiness = std::min(100, game_state.happiness + 10);
                     house.requesting = false;
-                    gameState.requestingHouseId = -1;
-                    gameState.requestTimeLeft = 0.0f;
+                    game_state.requesting_house_id = -1;
+                    game_state.request_time_left = 0.0f;
                     house.delivered = true;
-                    house.deliveryEffectTimer = 2.5f;
+                    house.delivery_effect_timer = 2.5f;
                 }
                 else {
-                    gameState.happiness = std::max(0, gameState.happiness - 10);
+                    game_state.happiness = std::max(0, game_state.happiness - 10);
                 }
                 break;
             }
         }
     }
-    gameState.projectiles.erase(
-        std::remove_if(gameState.projectiles.begin(), gameState.projectiles.end(),
+    game_state.projectiles.erase(
+        std::remove_if(game_state.projectiles.begin(), game_state.projectiles.end(),
             [](const std::unique_ptr<Projectile>& p) {
                 return !p || !p->alive;
             }),
-        gameState.projectiles.end()
+        game_state.projectiles.end()
     );
 }
 
-std::string CupcakeGame::getRandomHouseModel() {
-    if (this->houseModels.empty()) return "house";
-    std::uniform_int_distribution<size_t> modelDist(0, this->houseModels.size() - 1);
-    return this->houseModels[modelDist(this->rng)];
-}
-
-glm::vec3 CupcakeGame::getHouseExtents(const std::string& modelName) {
-    if (modelName == "bambo_house") return glm::vec3(4.0f, 6.0f, 4.0f);
-    if (modelName == "cyprys_house") return glm::vec3(4.5f, 7.0f, 4.5f);
-    if (modelName == "building") return glm::vec3(6.0f, 9.0f, 6.0f);
+glm::vec3 CupcakeGame::get_house_extents(const std::string& model_name) {
+    if (model_name == "bambo_house") return glm::vec3(4.0f, 6.0f, 4.0f);
+    if (model_name == "cyprys_house") return glm::vec3(4.5f, 7.0f, 4.5f);
+    if (model_name == "building") return glm::vec3(6.0f, 9.0f, 6.0f);
     return glm::vec3(3.5f, 5.0f, 3.5f);
 }
 
-float CupcakeGame::getIndicatorHeight(const std::string& modelName) {
+float CupcakeGame::get_indicator_height(const std::string& modelName) {
     if (modelName == "bambo_house") return 8.0f;
     if (modelName == "cyprys_house") return 9.0f;
     if (modelName == "building") return 12.0f;
     return 7.0f;
 }
 
-void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem* physicsSystem) {
-    if (!camera || !gameState.active) return;
-    float moveSpeed = gameState.speed * deltaTime;
+void CupcakeGame::update_movement(float delta, Camera* camera, PhysicsSystem* physics_system) {
+    if (!camera || !game_state.active) return;
+    float moveSpeed = game_state.speed * delta;
     glm::vec3 movement = glm::vec3(0.0f, 0.0f, -moveSpeed);
-    if (physicsSystem) {
-        glm::vec3 actualMovement = physicsSystem->moveCamera(*camera, movement);
+    if (physics_system) {
+        glm::vec3 actualMovement = physics_system->moveCamera(*camera, movement);
         camera->Position += actualMovement;
     }
     else {
@@ -162,54 +189,54 @@ void CupcakeGame::updateMovement(float deltaTime, Camera* camera, PhysicsSystem*
     }
 }
 
-void CupcakeGame::updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem) {
+void CupcakeGame::update_earthquake(float delta, Camera* camera, AudioEngine* audio_engine, ParticleSystem* particle_system) {
     if (!camera) return;
-    if (gameState.quakeCooldown > 0.0f) {
-        gameState.quakeCooldown -= deltaTime;
+    if (game_state.quake_cooldown > 0.0f) {
+        game_state.quake_cooldown -= delta;
     }
-    if (!gameState.quakeActive && gameState.quakeCooldown <= 0.0f) {
-        gameState.quakeActive = true;
-        gameState.quakeTimeLeft = gameState.quakeDuration;
-        gameState.quakeEpicenter = camera->Position + glm::vec3(
+    if (!game_state.quake_active && game_state.quake_cooldown <= 0.0f) {
+        game_state.quake_active = true;
+        game_state.quake_time_left = game_state.quake_duration;
+        game_state.quake_epicenter = camera->Position + glm::vec3(
             (unirand(rng) - 0.5f) * 50.0f, 0.0f, (unirand(rng) - 0.5f) * 50.0f
         );
-        if (audioEngine && !quakeSoundPlaying) {
-            if (audioEngine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", gameState.quakeEpicenter, &quakeSoundHandle)) {
-                quakeSoundPlaying = true;
+        if (audio_engine && !quake_sound_playing) {
+            if (audio_engine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", game_state.quake_epicenter, &quake_sound_handle)) {
+                quake_sound_playing = true;
             }
         }
     }
-    if (gameState.quakeActive) {
-        gameState.quakeTimeLeft -= deltaTime;
-        if (gameState.quakeTimeLeft <= 0.0f) {
-            gameState.quakeActive = false;
-            gameState.quakeCooldown = 25.0f;
-            if (audioEngine && quakeSoundPlaying) {
-                audioEngine->stopSound(quakeSoundHandle);
-                quakeSoundPlaying = false;
+    if (game_state.quake_active) {
+        game_state.quake_time_left -= delta;
+        if (game_state.quake_time_left <= 0.0f) {
+            game_state.quake_active = false;
+            game_state.quake_cooldown = 25.0f;
+            if (audio_engine && quake_sound_playing) {
+                audio_engine->stop_sound(quake_sound_handle);
+                quake_sound_playing = false;
             }
         }
         else {
-            float distance = glm::length(camera->Position - gameState.quakeEpicenter);
+            float distance = glm::length(camera->Position - game_state.quake_epicenter);
             float intensity = std::max(0.0f, 1.0f - distance / 100.0f);
-            float shakeX = (unirand(rng) - 0.5f) * gameState.quakeAmplitude * intensity;
-            float shakeY = (unirand(rng) - 0.5f) * gameState.quakeAmplitude * intensity;
-            float shakeZ = (unirand(rng) - 0.5f) * gameState.quakeAmplitude * intensity;
-            camera->Position += glm::vec3(shakeX, shakeY, shakeZ);
+            float shake_x = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
+            float shake_y = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
+            float shake_z = (unirand(rng) - 0.5f) * game_state.quake_amplitude * intensity;
+            camera->Position += glm::vec3(shake_x, shake_y, shake_z);
 
-            if (particleSystem) {
-                for (const auto& segment : gameState.roadSegments) {
-                    float halfWidth = gameState.roadSegmentWidth * 0.5f;
-                    float halfLength = gameState.roadSegmentLength * 0.5f;
+            if (particle_system) {
+                for (const auto& segment : game_state.road_segments) {
+                    float halfWidth = game_state.road_segment_width * 0.5f;
+                    float halfLength = game_state.road_segment_length * 0.5f;
                     
                     glm::vec3 pos = glm::vec3(
-                        (unirand(rng) - 0.5f) * gameState.roadSegmentWidth,
+                        (unirand(rng) - 0.5f) * game_state.road_segment_width,
                         0.1f,
-                        segment.z + (unirand(rng) - 0.5f) * gameState.roadSegmentLength
+                        segment.z + (unirand(rng) - 0.5f) * game_state.road_segment_length
                     );
 
-                    particleSystem->setEmitterPosition(pos);
-                    particleSystem->emitSmoke(5);
+                    particle_system->set_emitter_position(pos);
+                    particle_system->emit_smoke(5);
                 }
             }
         }

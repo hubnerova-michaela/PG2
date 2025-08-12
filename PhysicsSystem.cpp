@@ -215,7 +215,7 @@ void PhysicsSystem::setObjectHitCallback(std::function<void(const glm::vec3&)> c
     objectHitCallback = callback;
 }
 
-void PhysicsSystem::removeCollisionObject(const glm::vec3& position) {
+void PhysicsSystem::remove_collision_object(const glm::vec3& position) {
     collisionObjects.erase(
         std::remove_if(collisionObjects.begin(), collisionObjects.end(),
             [&](const CollisionObject& obj) {

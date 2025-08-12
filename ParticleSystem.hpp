@@ -57,12 +57,12 @@ public:
     ParticleSystem(ShaderProgram& shaderProgram, size_t maxParticles = 1000);
     ~ParticleSystem();
     
-    void setEmitterPosition(const glm::vec3& position);
+    void set_emitter_position(const glm::vec3& position);
     void setParticleType(ParticleType type); // New method to set particle type
     void update(float deltaTime);
     void draw(const glm::mat4& view, const glm::mat4& projection);
     void emit(int count = 1);
-    void emitSmoke(int count = 1); // New method specifically for smoke
+    void emit_smoke(int count = 1); // New method specifically for smoke
     void reset();
     
     // Collision detection methods

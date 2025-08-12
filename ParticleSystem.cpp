@@ -42,7 +42,7 @@ void ParticleSystem::setupBuffers() {
     glBindVertexArray(0);
 }
 
-void ParticleSystem::setEmitterPosition(const glm::vec3& position) {
+void ParticleSystem::set_emitter_position(const glm::vec3& position) {
     emitterPosition = position;
 }
 
@@ -197,7 +197,7 @@ void ParticleSystem::emit(int count) {
     }
 }
 
-void ParticleSystem::emitSmoke(int count) {
+void ParticleSystem::emit_smoke(int count) {
     ParticleType previousType = currentParticleType;
     setParticleType(ParticleType::SMOKE);
     emit(count);

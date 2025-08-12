@@ -11,9 +11,9 @@ HouseGenerator::HouseGenerator()
 void HouseGenerator::updateRequests(float deltaTime, GameState& gameState, const Camera* camera) {
     if (!camera) return;
 
-    if (gameState.requestingHouseId < 0) {
+    if (gameState.requesting_house_id < 0) {
         this->requestTimer += deltaTime;
-        if (this->requestTimer >= gameState.requestInterval && !gameState.houses.empty()) {
+        if (this->requestTimer >= gameState.request_interval && !gameState.houses.empty()) {
             std::vector<int> potentialIndices;
             for (size_t i = 0; i < gameState.houses.size(); ++i) {
                 const auto& h = gameState.houses[i];
@@ -27,25 +27,25 @@ void HouseGenerator::updateRequests(float deltaTime, GameState& gameState, const
                 int pickedHouseIndex = potentialIndices[dist(this->rng)];
                 
                 gameState.houses[pickedHouseIndex].requesting = true;
-                gameState.requestingHouseId = gameState.houses[pickedHouseIndex].id;
-                gameState.requestTimeLeft = gameState.requestTimeout;
+                gameState.requesting_house_id = gameState.houses[pickedHouseIndex].id;
+                gameState.request_time_left = gameState.request_timeout;
                 this->requestTimer = 0.0f;
-                std::cout << "REQUEST HANDLER: New delivery request at house " << gameState.requestingHouseId << std::endl;
+                std::cout << "REQUEST HANDLER: New delivery request at house " << gameState.requesting_house_id << std::endl;
             }
         }
     } else {
-        gameState.requestTimeLeft -= deltaTime;
-        if (gameState.requestTimeLeft <= 0.0f) {
+        gameState.request_time_left -= deltaTime;
+        if (gameState.request_time_left <= 0.0f) {
             gameState.happiness = glm::max(0, gameState.happiness - 8);
             std::cout << "REQUEST HANDLER: Missed delivery! Happiness: " << gameState.happiness << "%" << std::endl;
             
             for (auto& h : gameState.houses) {
-                if (h.id == gameState.requestingHouseId) { 
+                if (h.id == gameState.requesting_house_id) { 
                     h.requesting = false; 
                     break; 
                 }
             }
-            gameState.requestingHouseId = -1;
+            gameState.requesting_house_id = -1;
             this->requestTimer = 0.0f;
         }
     }

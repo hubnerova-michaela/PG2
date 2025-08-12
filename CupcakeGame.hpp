@@ -6,104 +6,89 @@
 #include <random>
 #include <glm/glm.hpp>
 #include "HouseGenerator.hpp"
-#include "Projectile.hpp" // Make sure you have a header for your Projectile class
+#include "Projectile.hpp"
 
-// Forward declarations
 class Camera;
 class AudioEngine;
 class ParticleSystem;
 class PhysicsSystem;
 
-// Forward declare sol::state to avoid including Sol2 in header
-namespace sol {
-    class state;
-}
-
-// Defines a single house in the game world
 struct House {
-    int id = -1;
-    glm::vec3 position{0.0f};
-    std::string modelName;
-    glm::vec3 halfExtents{1.0f};
-    float indicatorHeight = 7.0f;
-    bool requesting = false;
-    bool delivered = false;
-    float deliveryEffectTimer = 0.0f;
+   int id = -1;
+   glm::vec3 position{0.0f};
+   std::string modelName;
+   glm::vec3 half_extents{1.0f};
+   float indicator_height = 7.0f;
+   bool requesting = false;
+   bool delivered = false;
+   float delivery_effect_timer = 0.0f;
 };
 
-// Holds all the dynamic data for the game
 struct GameState {
-    bool active = true;
-    int money = 100;
-    int happiness = 100;
-    float speed = 8.0f;
-    float maxSpeed = 30.0f;
-    int nextHouseId = 0;
-    int requestingHouseId = -1;
-    float requestTimeout = 10.0f;
-    float requestTimeLeft = 0.0f;
-    float requestInterval = 5.0f;
-    float minInterval = 2.0f;
-    float pacingTimer = 0.0f;
-    float pacingStep = 10.0f;
+   bool active = true;
+   int money = 100;
+   int happiness = 100;
+   float speed = 8.0f;
+   float max_speed = 30.0f;
+   int next_house_id = 0;
+   int requesting_house_id = -1;
+   float request_timeout = 10.0f;
+   float request_time_left = 0.0f;
+   float request_interval = 5.0f;
+   float min_interval = 2.0f;
+   float pacing_timer = 0.0f;
+   float pacing_step = 10.0f;
 
-    std::vector<glm::vec3> roadSegments;
-    int roadSegmentCount = 30;
-    float roadSegmentLength = 10.0f;
-    float roadSegmentWidth = 10.0f;
-    float houseOffsetX = 12.0f;
-    float houseSpacing = 18.0f;
-    
-    std::vector<House> houses;
-    std::vector<std::unique_ptr<Projectile>> projectiles;
+   std::vector<glm::vec3> road_segments;
+   int road_segment_count = 30;
+   float road_segment_length = 10.0f;
+   float road_segment_width = 10.0f;
+   float house_offset_x = 12.0f;
+   float house_spacing = 18.0f;
+   
+   std::vector<House> houses;
+   std::vector<std::unique_ptr<Projectile>> projectiles;
 
-    // Earthquake event data
-    bool quakeActive = false;
-    float quakeTimer = 0.0f;
-    float quakeCooldown = 30.0f;
-    float quakeTimeLeft = 0.0f;
-    float quakeDuration = 12.0f;
-    float quakeAmplitude = 0.05f;
-    glm::vec3 quakeEpicenter{0.0f};
-    std::mt19937 rng{std::random_device{}()};
-    std::uniform_real_distribution<float> unirand{0.0f, 1.0f};
+   bool quake_active = false;
+   float quake_timer = 0.0f;
+   float quake_cooldown = 30.0f;
+   float quake_time_left = 0.0f;
+   float quake_duration = 12.0f;
+   float quake_amplitude = 0.05f;
+   glm::vec3 quake_epicenter{0.0f};
+   std::mt19937 rng{std::random_device{}()};
+   std::uniform_real_distribution<float> unirand{0.0f, 1.0f};
 };
 
 class CupcakeGame {
 public:
-    CupcakeGame();
-    ~CupcakeGame();
+   CupcakeGame();
+   ~CupcakeGame();
 
-    void initialize();
-    void update(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem, PhysicsSystem* physicsSystem);
-    void handleMouseClick(Camera* camera);
-    GameState& getGameState() { return gameState; }
-    glm::vec3 getHouseExtents(const std::string& modelName);
-    float getIndicatorHeight(const std::string& modelName);
+   void initialize();
+   glm::vec3 calculate_movement(float delta, Camera* camera, PhysicsSystem* physics_system);
+   void update(float delta, Camera* camera, AudioEngine* audio_engine, ParticleSystem* particle_system, PhysicsSystem* physics_system);
+   void handle_mouse_click(Camera* camera);
+   GameState& get_game_state() { return game_state; }
+   glm::vec3 get_house_extents(const std::string& model_name);
+   float get_indicator_height(const std::string& model_name);
 
 private:
-    // Main update sub-routines
-    void updateMovement(float deltaTime, Camera* camera, PhysicsSystem* physicsSystem);
-    void updateProjectiles(float deltaTime);
-    void updateEarthquake(float deltaTime, Camera* camera, AudioEngine* audioEngine, ParticleSystem* particleSystem = nullptr);
-    void updateHouses(Camera* camera, PhysicsSystem* physicsSystem);
-    
-    // House generation methods, now part of this class
-    void spawnNewHouses(float zPosition, PhysicsSystem* physicsSystem);
-    std::string getRandomHouseModel();
+   void update_movement(float delta, Camera* camera, PhysicsSystem* physics_system);
+   void update_projectiles(float delta);
+   void update_earthquake(float delta, Camera* camera, AudioEngine* audio_engine, ParticleSystem* particle_system = nullptr);
+   void update_houses(Camera* camera, PhysicsSystem* physics_system);
 
-    GameState gameState;
-    std::unique_ptr<HouseGenerator> houseGenerator;
+   GameState game_state;
+   std::unique_ptr<HouseGenerator> house_generator;
 
-    // RNG and properties for house generation
-    std::mt19937 rng;
-    std::uniform_real_distribution<float> unirand;
-    std::vector<std::string> houseModels;
-    float emptyPlotProbability = 0.2f;
+   std::mt19937 rng;
+   std::uniform_real_distribution<float> unirand;
+   std::vector<std::string> house_models;
+   float empty_plot_probability = 0.2f;
 
-    // Sound handles
-    unsigned int quakeSoundHandle = 0;
-    bool quakeSoundPlaying = false;
-    
-    PhysicsSystem* cachedPhysicsSystem;
+   unsigned int quake_sound_handle = 0;
+   bool quake_sound_playing = false;
+   
+   PhysicsSystem* cached_physics_system;
 };

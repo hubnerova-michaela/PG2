@@ -147,7 +147,7 @@ void AudioEngine::setSoundPosition(unsigned int handle, const glm::vec3& positio
     }
 }
 
-void AudioEngine::stopSound(unsigned int handle) {
+void AudioEngine::stop_sound(unsigned int handle) {
     auto it = activeSounds.find(handle);
     if (it != activeSounds.end()) {
         if (it->second && it->second->isInitialized()) {
