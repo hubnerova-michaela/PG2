@@ -6,8 +6,13 @@
   "appname": "Cupcagame",
   "debug_mode": true,
   "default_resolution": {
-    "x": 1024,
-    "y": 768
+    "x": 1920,
+    "y": 1080
   },
-  "vsync_enabled": true
+  "fullscreen": true,
+  "vsync_enabled": false,
+  "windowed_position": {
+    "x": 100,
+    "y": 100
+  }
 }

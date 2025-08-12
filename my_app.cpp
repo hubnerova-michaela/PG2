@@ -1239,33 +1239,32 @@ int main()
                 if (h.requesting && scene.find("cupcake") != scene.end())
                 {
                     glm::vec3 indicator_pos = h.position + glm::vec3(0.0f, h.indicator_height, 0.0f);
-
                     indicator_pos.y += sin(elapsedTime * 2.5f) * 0.7f;
 
                     float x_offset = h.half_extents.x + 3.0f;
-
+                    // Make the indicator always appear clearly next to the house
                     if (h.position.x < 0) // dum je nalevo
                     {
-                        indicator_pos.x += x_offset;
+                        indicator_pos.x = h.position.x - h.half_extents.x - 2.5f; // left of house
                     }
                     else // dum je napravo
                     {
-                        indicator_pos.x -= x_offset;
+                        indicator_pos.x = h.position.x + h.half_extents.x + 2.5f; // right of house
                     }
 
-                    glm::vec3 indicator_scale(0.2f);
+                    glm::vec3 indicator_scale(0.25f, 0.25f, 0.25f); // Make cupcake bigger for visibility
 
                     glm::mat4 cupcake_model_matrix = glm::mat4(1.0f);
                     cupcake_model_matrix = glm::translate(cupcake_model_matrix, indicator_pos);
                     cupcake_model_matrix = glm::rotate(cupcake_model_matrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     cupcake_model_matrix = glm::scale(cupcake_model_matrix, indicator_scale);
 
-                    phong_shader->setUniform("material.diffuse", glm::vec3(1.0f, 0.95f, 0.2f));
-                    phong_shader->setUniform("material.emission", glm::vec3(2.5f, 2.3f, 0.5f));
+                    phong_shader->setUniform("material_diffuse", glm::vec3(1.0f, 0.95f, 0.2f));
+                    phong_shader->setUniform("material_emission", glm::vec3(2.5f, 2.3f, 0.5f));
 
                     scene.at("cupcake")->draw(cupcake_model_matrix);
 
-                    phong_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
+                    phong_shader->setUniform("material_emission", glm::vec3(0.0f, 0.0f, 0.0f));
                 }
             }
 
@@ -1292,10 +1291,10 @@ int main()
                 for (const auto &cupcake : flying_cupcakes)
                 {
                     // Set transparent material with alpha from cupcake.alpha (0.5 = 50% transparency)
-                    phong_shader->setUniform("material.diffuse", glm::vec4(1.0f, 0.9f, 0.8f, cupcake.alpha));
-                    phong_shader->setUniform("material.specular", glm::vec3(0.3f, 0.3f, 0.3f));
-                    phong_shader->setUniform("material.shininess", 32.0f);
-                    phong_shader->setUniform("material.emission", glm::vec3(0.1f, 0.1f, 0.05f)); // Slight glow
+                    phong_shader->setUniform("material_diffuse", glm::vec4(1.0f, 0.9f, 0.8f, cupcake.alpha));
+                    phong_shader->setUniform("material_specular", glm::vec3(0.3f, 0.3f, 0.3f));
+                    phong_shader->setUniform("material_shininess", 32.0f);
+                    phong_shader->setUniform("material_emission", glm::vec3(0.1f, 0.1f, 0.05f)); // Slight glow
 
                     // Create rotation vector for the cupcake
                     glm::vec3 cupcake_rotation(0.0f, cupcake.rotation_y, 0.0f);
@@ -1306,7 +1305,7 @@ int main()
                 }
 
                 // Reset material properties
-                phong_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
+                phong_shader->setUniform("material_emission", glm::vec3(0.0f, 0.0f, 0.0f));
                 phong_shader->deactivate();
 
                 // Disable blending after transparent objects
@@ -1328,11 +1327,11 @@ int main()
                 glm::vec3 sunRotation(0.0f, elapsedTime * 30.0f, 0.0f);
                 glm::vec3 sunScale(20.0f);
 
-                phong_shader->setUniform("material.emission", glm::vec3(2.0f, 1.5f, 0.5f));
+                phong_shader->setUniform("material_emission", glm::vec3(2.0f, 1.5f, 0.5f));
 
                 scene.at("sphere")->draw(sunPosition, sunRotation, sunScale);
 
-                phong_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
+                phong_shader->setUniform("material_emission", glm::vec3(0.0f, 0.0f, 0.0f));
             }
 
             phong_shader->deactivate();
