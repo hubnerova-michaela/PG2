@@ -31,21 +31,64 @@ public:
     Model(const std::filesystem::path &filename, ShaderProgram &shader) : shader(shader)
     {
         std::vector<OBJMeshData> mesh_datas;
-        if (!loadOBJMeshes(filename.string().c_str(), mesh_datas)) {
+        if (!loadOBJMeshes(filename.string().c_str(), mesh_datas))
+        {
             std::cerr << "Failed to load OBJ file: " << filename << std::endl;
             throw std::runtime_error("OBJ loading failed for " + filename.string());
         }
         name = filename.stem().string();
-        for (const auto& mesh_data : mesh_datas) {
+        for (const auto &mesh_data : mesh_datas)
+        {
             std::vector<Vertex> vertices;
-            for (size_t i = 0; i < mesh_data.vertices.size(); ++i) {
+            for (size_t i = 0; i < mesh_data.vertices.size(); ++i)
+            {
                 Vertex v;
                 v.Position = mesh_data.vertices[i];
-                v.Normal = (i < mesh_data.normals.size()) ? mesh_data.normals[i] : glm::vec3(0,0,1);
-                v.TexCoords = (i < mesh_data.uvs.size()) ? mesh_data.uvs[i] : glm::vec2(0,0);
+                v.Normal = (i < mesh_data.normals.size()) ? mesh_data.normals[i] : glm::vec3(0, 0, 1);
+                v.TexCoords = (i < mesh_data.uvs.size()) ? mesh_data.uvs[i] : glm::vec2(0, 0);
                 vertices.push_back(v);
             }
             Mesh mesh(GL_TRIANGLES, shader, vertices, mesh_data.indices, glm::vec3(0.0f), glm::vec3(0.0f), 0);
+            mesh.diffuse_material = glm::vec4(mesh_data.diffuse_color, 1.0f);
+            meshes.push_back(std::move(mesh));
+        }
+    }
+
+    // Constructor with texture
+    Model(const std::filesystem::path &filename, ShaderProgram &shader, const std::filesystem::path &texturePath) : shader(shader)
+    {
+        std::vector<OBJMeshData> mesh_datas;
+        if (!loadOBJMeshes(filename.string().c_str(), mesh_datas))
+        {
+            std::cerr << "Failed to load OBJ file: " << filename << std::endl;
+            throw std::runtime_error("OBJ loading failed for " + filename.string());
+        }
+
+        // Load texture
+        GLuint textureID = 0;
+        try
+        {
+            textureID = TextureLoader::textureInit(texturePath);
+            std::cout << "Loaded texture for " << filename.stem().string() << ": " << texturePath << std::endl;
+        }
+        catch (const std::exception &e)
+        {
+            std::cerr << "Failed to load texture " << texturePath << ": " << e.what() << std::endl;
+        }
+
+        name = filename.stem().string();
+        for (const auto &mesh_data : mesh_datas)
+        {
+            std::vector<Vertex> vertices;
+            for (size_t i = 0; i < mesh_data.vertices.size(); ++i)
+            {
+                Vertex v;
+                v.Position = mesh_data.vertices[i];
+                v.Normal = (i < mesh_data.normals.size()) ? mesh_data.normals[i] : glm::vec3(0, 0, 1);
+                v.TexCoords = (i < mesh_data.uvs.size()) ? mesh_data.uvs[i] : glm::vec2(0, 0);
+                vertices.push_back(v);
+            }
+            Mesh mesh(GL_TRIANGLES, shader, vertices, mesh_data.indices, glm::vec3(0.0f), glm::vec3(0.0f), textureID);
             mesh.diffuse_material = glm::vec4(mesh_data.diffuse_color, 1.0f);
             meshes.push_back(std::move(mesh));
         }

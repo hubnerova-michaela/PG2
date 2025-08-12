@@ -143,6 +143,7 @@ void cleanupRoadGeometry()
 // KONFIGURACE
 
 void saveSettings();
+void toggleFullscreen(GLFWwindow *window);
 
 bool g_vSync = true;
 std::string g_windowTitle = "Cupcagame";
@@ -150,6 +151,13 @@ int g_window_width = 800;
 int g_window_height = 600;
 bool g_aa_enabled = false;
 int g_aa_level = 4;
+
+// Fullscreen support
+bool g_fullscreen = false;
+int g_windowed_width = 800;
+int g_windowed_height = 600;
+int g_windowed_pos_x = 100;
+int g_windowed_pos_y = 100;
 
 // INCLUDY
 
@@ -177,6 +185,23 @@ static GLint g_roadTexSamplerLoc = -1;
 static GLint g_roadTilingLoc = -1;
 
 std::vector<TransparentObject> transparentObjects;
+
+// Flying cupcakes structure
+struct FlyingCupcake
+{
+    glm::vec3 position;
+    glm::vec3 velocity;
+    float rotation_speed;
+    float rotation_y;
+    float alpha;
+    float scale;
+    glm::vec3 orbit_center;
+    float orbit_radius;
+    float orbit_angle;
+    float orbit_speed;
+};
+
+std::vector<FlyingCupcake> flying_cupcakes;
 
 std::unique_ptr<CupcakeGame> cupcagame;
 
@@ -258,6 +283,12 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
             lightning_system->pointLights[1].specular = glm::vec3(0.0f, 0.0f, 0.0f);
         }
         std::cout << "Bike lights: " << (bike_lights_on ? "ON" : "OFF") << std::endl;
+    }
+
+    if (key == GLFW_KEY_F && action == GLFW_PRESS)
+    {
+        toggleFullscreen(window);
+        saveSettings();
     }
 
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS)
@@ -381,6 +412,76 @@ void scroll_callback(GLFWwindow *window, double xoffset, double yoffset)
     }
 }
 
+void init_flying_cupcakes()
+{
+    flying_cupcakes.clear();
+
+    for (int i = 0; i < 5; ++i)
+    {
+        FlyingCupcake cupcake;
+
+        float angle = (i * 72.0f) * (3.14159f / 180.0f);
+        cupcake.orbit_center = glm::vec3(0.0f, 40.0f + i * 8.0f, -20.0f - i * 10.0f); // Much higher in the sky
+        cupcake.orbit_radius = 20.0f + i * 10.0f;
+        cupcake.orbit_angle = angle;
+        cupcake.orbit_speed = 0.3f + i * 0.1f;
+
+        cupcake.position = cupcake.orbit_center + glm::vec3(
+                                                      cos(cupcake.orbit_angle) * cupcake.orbit_radius,
+                                                      sin(i * 0.5f) * 5.0f,
+                                                      sin(cupcake.orbit_angle) * cupcake.orbit_radius);
+
+        cupcake.velocity = glm::vec3(
+            (rand() % 200 - 100) / 100.0f * 0.5f,
+            (rand() % 200 - 100) / 100.0f * 0.3f,
+            (rand() % 200 - 100) / 100.0f * 0.5f);
+
+        cupcake.rotation_speed = 5.0f + i * 2.0f;
+        cupcake.rotation_y = 0.0f;
+        cupcake.alpha = 0.5f; // 50% transparency for all flying cupcakes
+        cupcake.scale = 0.3f + i * 0.1f;
+
+        flying_cupcakes.push_back(cupcake);
+    }
+
+    std::cout << "Initialized " << flying_cupcakes.size() << " flying cupcakes" << std::endl;
+}
+
+void update_flying_cupcakes(float deltaTime)
+{
+    for (auto &cupcake : flying_cupcakes)
+    {
+        cupcake.orbit_angle += cupcake.orbit_speed * deltaTime;
+        if (cupcake.orbit_angle > 2.0f * 3.14159f)
+        {
+            cupcake.orbit_angle -= 2.0f * 3.14159f;
+        }
+
+        glm::vec3 orbitPos = cupcake.orbit_center + glm::vec3(
+                                                        cos(cupcake.orbit_angle) * cupcake.orbit_radius,
+                                                        sin(cupcake.orbit_angle * 0.5f) * 3.0f,
+                                                        sin(cupcake.orbit_angle) * cupcake.orbit_radius);
+
+        cupcake.position = orbitPos + cupcake.velocity * deltaTime * 10.0f;
+
+        cupcake.rotation_y += cupcake.rotation_speed * deltaTime;
+        if (cupcake.rotation_y > 360.0f)
+        {
+            cupcake.rotation_y -= 360.0f;
+        }
+
+        if (camera)
+        {
+            float distanceFromCamera = glm::length(cupcake.position - camera->Position);
+            if (distanceFromCamera > 150.0f)
+            {
+                glm::vec3 directionToCamera = normalize(camera->Position - cupcake.position);
+                cupcake.orbit_center += directionToCamera * 50.0f;
+            }
+        }
+    }
+}
+
 void init_assets()
 {
     phong_shader = std::make_unique<ShaderProgram>("resources/shaders/phong.vert", "resources/shaders/phong.frag");
@@ -420,6 +521,7 @@ void init_assets()
     cupcagame->initialize();
 
     initRoadGeometry();
+    init_flying_cupcakes();
 
     {
         const std::filesystem::path texPath = "resources/textures/asphalt.jpg";
@@ -450,10 +552,9 @@ void init_assets()
 
     std::cout << "Nacitani modelu..." << std::endl;
     std::vector<std::pair<std::string, std::string>> models = {
-        {"cupcake", "resources/objects/12188_Cupcake_v1_L3.obj"},
-        {"bambo_house", "resources/objects/Bambo_House.obj"},
         {"cyprys_house", "resources/objects/Cyprys_House.obj"},
-        {"building", "resources/objects/Building,.obj"}};
+        {"building", "resources/objects/Building,.obj"},
+        {"sphere", "resources/objects/sphere.obj"}};
 
     for (const auto &[name, path] : models)
     {
@@ -475,6 +576,45 @@ void init_assets()
         {
             std::cerr << "Nepodarilo se nacist" << name << " z " << path << ": " << e.what() << std::endl;
         }
+    }
+
+    try
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        std::cout << "Nacitani resources/objects/12188_Cupcake_v1_L3.obj with texture..." << std::endl;
+
+        auto model = std::make_unique<Model>("resources/objects/12188_Cupcake_v1_L3.obj", *phong_shader, "resources/textures/5376950_2795918.jpg");
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        std::cout << "Nacetlo se cupcake (" << model->meshes.size()
+                  << " meshu) s texturou v " << duration.count() << "ms" << std::endl;
+        scene["cupcake"] = std::move(model);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Nepodarilo se nacist cupcake s texturou: " << e.what() << std::endl;
+    }
+
+    // Load bambo_house with texture separately
+    try
+    {
+        auto start = std::chrono::high_resolution_clock::now();
+        std::cout << "Nacitani resources/objects/Bambo_House.obj with texture..." << std::endl;
+
+        auto model = std::make_unique<Model>("resources/objects/Bambo_House.obj", *phong_shader, "resources/textures/6696348.jpg");
+
+        auto end = std::chrono::high_resolution_clock::now();
+        auto duration = std::chrono::duration_cast<std::chrono::milliseconds>(end - start);
+
+        std::cout << "Nacetlo se bambo_house (" << model->meshes.size()
+                  << " meshu) s texturou v " << duration.count() << "ms" << std::endl;
+        scene["bambo_house"] = std::move(model);
+    }
+    catch (const std::exception &e)
+    {
+        std::cerr << "Nepodarilo se nacist bambo_house s texturou: " << e.what() << std::endl;
     }
 
     std::cout << "Scena obsahuje " << scene.size() << " modely:" << std::endl;
@@ -617,6 +757,9 @@ void saveSettings()
         settings["debug_mode"] = true;
         settings["antialiasing"]["enabled"] = g_aa_enabled;
         settings["antialiasing"]["level"] = g_aa_level;
+        settings["fullscreen"] = g_fullscreen;
+        settings["windowed_position"]["x"] = g_windowed_pos_x;
+        settings["windowed_position"]["y"] = g_windowed_pos_y;
 
         std::ofstream settingsFile("app_settings.json");
         if (settingsFile.is_open())
@@ -633,6 +776,35 @@ void saveSettings()
     catch (const std::exception &e)
     {
         std::cerr << "Chyba pri ukladani nastaveni: " << e.what() << std::endl;
+    }
+}
+
+void toggleFullscreen(GLFWwindow *window)
+{
+    g_fullscreen = !g_fullscreen;
+
+    if (g_fullscreen)
+    {
+        // Save current windowed mode settings
+        glfwGetWindowPos(window, &g_windowed_pos_x, &g_windowed_pos_y);
+        glfwGetWindowSize(window, &g_windowed_width, &g_windowed_height);
+
+        // Get primary monitor
+        GLFWmonitor *monitor = glfwGetPrimaryMonitor();
+        const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+
+        // Switch to fullscreen
+        glfwSetWindowMonitor(window, monitor, 0, 0, mode->width, mode->height, mode->refreshRate);
+
+        std::cout << "Fullscreen: ON (" << mode->width << "x" << mode->height << ")" << std::endl;
+    }
+    else
+    {
+        // Switch back to windowed mode
+        glfwSetWindowMonitor(window, nullptr, g_windowed_pos_x, g_windowed_pos_y,
+                             g_windowed_width, g_windowed_height, GLFW_DONT_CARE);
+
+        std::cout << "Fullscreen: OFF (" << g_windowed_width << "x" << g_windowed_height << ")" << std::endl;
     }
 }
 
@@ -661,6 +833,19 @@ int main()
             g_vSync = settings["vsync_enabled"].get<bool>();
         }
 
+        if (settings.contains("fullscreen") && settings["fullscreen"].is_boolean())
+        {
+            g_fullscreen = settings["fullscreen"].get<bool>();
+        }
+
+        if (settings.contains("windowed_position") &&
+            settings["windowed_position"]["x"].is_number_integer() &&
+            settings["windowed_position"]["y"].is_number_integer())
+        {
+            g_windowed_pos_x = settings["windowed_position"]["x"].get<int>();
+            g_windowed_pos_y = settings["windowed_position"]["y"].get<int>();
+        }
+
         std::cout << "Application: " << g_windowTitle << std::endl;
         std::cout << "Initial resolution: " << g_window_width << "x" << g_window_height << std::endl;
 
@@ -682,11 +867,37 @@ int main()
             std::cout << "Multisampling s " << g_aa_level << " samply" << std::endl;
         }
 
-        GLFWwindow *window = glfwCreateWindow(g_window_width, g_window_height, g_windowTitle.c_str(), NULL, NULL);
+        GLFWmonitor *monitor = g_fullscreen ? glfwGetPrimaryMonitor() : nullptr;
+        int width = g_window_width;
+        int height = g_window_height;
+
+        if (g_fullscreen && monitor)
+        {
+            const GLFWvidmode *mode = glfwGetVideoMode(monitor);
+            width = mode->width;
+            height = mode->height;
+            g_window_width = width;
+            g_window_height = height;
+            std::cout << "Starting in fullscreen mode: " << width << "x" << height << std::endl;
+        }
+        else
+        {
+            g_windowed_width = width;
+            g_windowed_height = height;
+            std::cout << "Starting in windowed mode: " << width << "x" << height << std::endl;
+        }
+
+        GLFWwindow *window = glfwCreateWindow(width, height, g_windowTitle.c_str(), monitor, NULL);
         if (!window)
         {
             glfwTerminate();
             throw std::runtime_error("Chyba pri vytvareni GLFW okna");
+        }
+
+        // Set window position if windowed mode
+        if (!g_fullscreen)
+        {
+            glfwSetWindowPos(window, g_windowed_pos_x, g_windowed_pos_y);
         }
 
         glfwMakeContextCurrent(window);
@@ -843,6 +1054,9 @@ int main()
                 lastFrameTime = currentTime;
 
                 cupcagame->update(deltaTime, camera.get(), audio_engine.get(), particle_system.get(), physics_system.get());
+
+                // Update flying cupcakes
+                update_flying_cupcakes(deltaTime);
 
                 {
                     float farthestZ = camera->Position.z;
@@ -1064,6 +1278,39 @@ int main()
                         projectile->draw(scene.at("cupcake").get());
                     }
                 }
+            }
+
+            // Flying cupcakes in the sky
+            if (scene.find("cupcake") != scene.end() && phong_shader && !flying_cupcakes.empty())
+            {
+                // Enable blending for transparency
+                glEnable(GL_BLEND);
+                glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
+
+                phong_shader->activate();
+
+                for (const auto &cupcake : flying_cupcakes)
+                {
+                    // Set transparent material with alpha from cupcake.alpha (0.5 = 50% transparency)
+                    phong_shader->setUniform("material.diffuse", glm::vec4(1.0f, 0.9f, 0.8f, cupcake.alpha));
+                    phong_shader->setUniform("material.specular", glm::vec3(0.3f, 0.3f, 0.3f));
+                    phong_shader->setUniform("material.shininess", 32.0f);
+                    phong_shader->setUniform("material.emission", glm::vec3(0.1f, 0.1f, 0.05f)); // Slight glow
+
+                    // Create rotation vector for the cupcake
+                    glm::vec3 cupcake_rotation(0.0f, cupcake.rotation_y, 0.0f);
+                    glm::vec3 cupcake_scale(cupcake.scale);
+
+                    // Draw the flying cupcake
+                    scene.at("cupcake")->draw(cupcake.position, cupcake_rotation, cupcake_scale);
+                }
+
+                // Reset material properties
+                phong_shader->setUniform("material.emission", glm::vec3(0.0f, 0.0f, 0.0f));
+                phong_shader->deactivate();
+
+                // Disable blending after transparent objects
+                glDisable(GL_BLEND);
             }
 
             // slunce
