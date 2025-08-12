@@ -110,10 +110,6 @@ void CupcakeGame::update(float delta, Camera *camera, AudioEngine *audio_engine,
             projectile->position += world_movement;
         }
     }
-    if (game_state.quake_active)
-    {
-        game_state.quake_epicenter += world_movement;
-    }
 
     house_generator->updateRequests(delta, this->game_state, camera);
     update_earthquake(delta, camera, audio_engine, particle_system);
@@ -308,9 +304,13 @@ void CupcakeGame::update_earthquake(float delta, Camera *camera, AudioEngine *au
     {
         game_state.quake_active = true;
         game_state.quake_time_left = game_state.quake_duration;
-        game_state.quake_epicenter = camera->Position + glm::vec3(
-                                                            (unirand(rng) - 0.5f) * 50.0f, 0.0f, (unirand(rng) - 0.5f) * 50.0f);
-        std::cout << "Earthquake started! Epicenter: (" << game_state.quake_epicenter.x << ", " << game_state.quake_epicenter.y << ", " << game_state.quake_epicenter.z << ")" << std::endl;
+        
+        // Store relative offset from camera instead of absolute position
+        game_state.quake_relative_offset = glm::vec3(
+            (unirand(rng) - 0.5f) * 50.0f, 0.0f, (unirand(rng) - 0.5f) * 50.0f);
+        game_state.quake_epicenter = camera->Position + game_state.quake_relative_offset;
+        
+        std::cout << "Earthquake started! Relative offset: (" << game_state.quake_relative_offset.x << ", " << game_state.quake_relative_offset.y << ", " << game_state.quake_relative_offset.z << ")" << std::endl;
         if (audio_engine && !this->quake_sound_playing)
         {
             if (audio_engine->playLoop3D("resources/audio/052256_cracking-earthquake-cracking-soil-cracking-stone-86770.wav", game_state.quake_epicenter, &this->quake_sound_handle))
@@ -338,9 +338,10 @@ void CupcakeGame::update_earthquake(float delta, Camera *camera, AudioEngine *au
         else
         {
             // Let the main loop handle camera shake via view matrix modification
-            // Just update the sound position if it's playing
+            // Update sound position relative to current camera position
             if (audio_engine && this->quake_sound_playing)
             {
+                game_state.quake_epicenter = camera->Position + game_state.quake_relative_offset;
                 audio_engine->setSoundPosition(this->quake_sound_handle, game_state.quake_epicenter);
             }
 

@@ -58,6 +58,7 @@ struct GameState
    float quake_duration = 12.0f;
    float quake_amplitude = 0.05f;
    glm::vec3 quake_epicenter{0.0f};
+   glm::vec3 quake_relative_offset{0.0f}; // Offset relative to camera for consistent audio
    std::mt19937 rng{std::random_device{}()};
    std::uniform_real_distribution<float> unirand{0.0f, 1.0f};
 };

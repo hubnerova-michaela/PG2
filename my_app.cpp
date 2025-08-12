@@ -537,10 +537,10 @@ void init_assets()
     if (audio_engine->init())
     {
         std::cout << "Audio engine inicializovan" << std::endl;
-        glm::vec3 quadPosition = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
+        glm::vec3 quadPosition = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 10.0f);
         if (audio_engine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_ambient_sound_handle))
         {
-            audio_engine->setSoundVolume(g_ambient_sound_handle, 0.25f); // Set ambient music to 25% volume
+            audio_engine->setSoundVolume(g_ambient_sound_handle, 0.2f); // Set ambient music to 25% volume
             std::cout << "Hudba zacala na: " << quadPosition.x << ", " << quadPosition.y << ", " << quadPosition.z << std::endl;
         }
     }
