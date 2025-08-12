@@ -239,6 +239,27 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
         std::cout << "Svetlo: " << (spotLightOn ? "ON" : "OFF") << std::endl;
     }
 
+    if (key == GLFW_KEY_B && action == GLFW_PRESS && lightning_system)
+    {
+        static bool bike_lights_on = true;
+        bike_lights_on = !bike_lights_on;
+        if (bike_lights_on)
+        {
+            lightning_system->pointLights[0].diffuse = glm::vec3(1.0f, 0.0f, 0.0f);
+            lightning_system->pointLights[0].specular = glm::vec3(1.0f, 0.2f, 0.2f);
+            lightning_system->pointLights[1].diffuse = glm::vec3(1.0f, 0.0f, 0.0f);
+            lightning_system->pointLights[1].specular = glm::vec3(1.0f, 0.2f, 0.2f);
+        }
+        else
+        {
+            lightning_system->pointLights[0].diffuse = glm::vec3(0.0f, 0.0f, 0.0f);
+            lightning_system->pointLights[0].specular = glm::vec3(0.0f, 0.0f, 0.0f);
+            lightning_system->pointLights[1].diffuse = glm::vec3(0.0f, 0.0f, 0.0f);
+            lightning_system->pointLights[1].specular = glm::vec3(0.0f, 0.0f, 0.0f);
+        }
+        std::cout << "Bike lights: " << (bike_lights_on ? "ON" : "OFF") << std::endl;
+    }
+
     if (key == GLFW_KEY_F5 && action == GLFW_PRESS)
     {
         if (cupcagame)
@@ -416,7 +437,7 @@ void init_assets()
     if (audio_engine->init())
     {
         std::cout << "Audio engine inicializovan" << std::endl;
-        glm::vec3 quadPosition(0.0f, 0.0f, -3.0f);
+        glm::vec3 quadPosition = camera ? camera->Position : glm::vec3(0.0f, 2.0f, 5.0f);
         if (audio_engine->playLoop3D("resources/audio/818034__boatlanman__slow-ethereal-piano-loop-80bpm.wav", quadPosition, &g_ambient_sound_handle))
         {
             std::cout << "Hudba zacala na: " << quadPosition.x << ", " << quadPosition.y << ", " << quadPosition.z << std::endl;
@@ -857,6 +878,12 @@ int main()
 
             audio_engine->setListener(camera->Position, camera->Front, camera->Up);
 
+            // Update ambient sound position to follow camera
+            if (g_ambient_sound_handle != 0)
+            {
+                audio_engine->setSoundPosition(g_ambient_sound_handle, camera->Position);
+            }
+
             {
                 glm::vec3 normal_sky_color = glm::vec3(0.55f, 0.70f, 0.95f); // modra
                 glm::vec3 quake_sky_color = glm::vec3(0.55f, 0.55f, 0.55f);  // seda
@@ -891,6 +918,9 @@ int main()
                 {
                     lightning_system->spotLight.position = camera->Position;
                     lightning_system->spotLight.direction = camera->Front;
+
+                    // Update bike lights to follow camera
+                    lightning_system->updateBikeLights(camera->Position, camera->Right);
                 }
                 else
                 {
