@@ -32,6 +32,35 @@ void CupcakeGame::initialize()
     }
 }
 
+void CupcakeGame::restart_game()
+{
+    game_state = GameState();
+    game_state.money = 50;
+    game_state.happiness = 50;
+    game_state.active = true;
+
+    // Odstraneni projektilu
+    game_state.projectiles.clear();
+
+    // Odstraneni domu
+    game_state.houses.clear();
+
+    // Vyresetovani silnice
+    game_state.road_segments.clear();
+    for (int i = 0; i < game_state.road_segment_count; ++i)
+    {
+        game_state.road_segments.push_back(glm::vec3(0.0f, 0.0f, -static_cast<float>(i) * game_state.road_segment_length));
+    }
+
+    // Vyresetovani nacachovaneho fyzikalniho systemu
+    if (cached_physics_system)
+    {
+        cached_physics_system->clearCollisionObjects();
+    }
+
+    std::cout << "Hra restartovana!" << std::endl;
+}
+
 glm::vec3 CupcakeGame::calculate_movement(float delta, Camera *camera, PhysicsSystem *physics_system)
 {
     if (!camera || !game_state.active)
@@ -50,6 +79,19 @@ void CupcakeGame::update(float delta, Camera *camera, AudioEngine *audio_engine,
 {
     if (!game_state.active)
         return;
+
+    // stav hry
+    if (game_state.money <= 0 || game_state.happiness <= 0)
+    {
+        game_state.active = false;
+        std::cout << "Game Over! ";
+        if (game_state.money <= 0)
+            std::cout << "Dosly penize!";
+        if (game_state.happiness <= 0)
+            std::cout << "Doslo spokojenost!";
+        std::cout << std::endl;
+        return;
+    }
 
     glm::vec3 world_movement = calculate_movement(delta, camera, physics_system);
 
@@ -143,7 +185,14 @@ void CupcakeGame::handle_mouse_click(Camera *camera)
 {
     if (!camera || !game_state.active)
         return;
-    // Cost to shoot a cupcake
+
+    if (game_state.money < 10)
+    {
+        std::cout << "Nedostatek penez pro vystrelebi cupcaku!" << std::endl;
+        return;
+    }
+
+    // Cena za vystrel
     game_state.money -= 10;
     glm::vec3 projectile_position = camera->Position + camera->Front * 2.0f;
     glm::vec3 projectile_velocity = camera->Front * 50.0f;
@@ -207,7 +256,6 @@ void CupcakeGame::update_projectiles(float deltaTime)
                        }),
         game_state.projectiles.end());
 }
-// --- END CHANGE ---
 
 glm::vec3 CupcakeGame::get_house_extents(const std::string &model_name)
 {

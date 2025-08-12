@@ -207,7 +207,6 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     if (key == GLFW_KEY_F10 && action == GLFW_PRESS)
     {
         g_vSync = !g_vSync;
-        g_vSync = !g_vSync;
         glfwSwapInterval(g_vSync ? 1 : 0);
         std::cout << "VSync: " << (g_vSync ? "ON" : "OFF") << std::endl;
 
@@ -244,8 +243,33 @@ void key_callback(GLFWwindow *window, int key, int scancode, int action, int mod
     {
         if (cupcagame)
         {
-            cupcagame->get_game_state().active = !cupcagame->get_game_state().active;
-            std::cout << "Cupcagame: " << (cupcagame->get_game_state().active ? "Aktivni" : "Pauznuty") << std::endl;
+            if (cupcagame->is_game_over())
+            {
+                // Restart game if it's game over
+                cupcagame->restart_game();
+
+                // Also respawn houses
+                cupcagame->get_game_state().houses.clear();
+                if (physics_system)
+                {
+                    physics_system->clearCollisionObjects();
+                }
+
+                float z = -15.0f;
+                for (int i = 0; i < 20; ++i)
+                {
+                    spawn_new_houses(*cupcagame, *physics_system, z);
+                    z -= cupcagame->get_game_state().house_spacing;
+                }
+
+                std::cout << "Hra restartovana!" << std::endl;
+            }
+            else
+            {
+                // Normal pause/unpause
+                cupcagame->get_game_state().active = !cupcagame->get_game_state().active;
+                std::cout << "Cupcagame: " << (cupcagame->get_game_state().active ? "Aktivni" : "Pauznuty") << std::endl;
+            }
         }
     }
 }
@@ -725,9 +749,9 @@ int main()
             ImGui::Text("Nacitani Cupcagame...");
             ImGui::Separator();
             ImGui::Text("A jak hrat? Strilej cupcaky na domy, ktere je chteji...");
-            ImGui::Text("Mas dva ukazatele: penize a stesti.");
+            ImGui::Text("Mas dva ukazatele: penize a spokojenost.");
             ImGui::Text("Kdyz budes strilet cupcaky na vsechny domy, dojdou ti penize.");
-            ImGui::Text("Kdyz nebudes strilet cupcaky na domy, ktere je chteji, dojde ti stesti.");
+            ImGui::Text("Kdyz nebudes strilet cupcaky na domy, ktere je chteji, dojde ti spokojenost.");
             ImGui::Separator();
             ImGui::Text("A nezapomen na to, ze cupcake je nejlepsi!");
 
@@ -751,6 +775,7 @@ int main()
         }
 
         glEnable(GL_DEPTH_TEST);
+        glDepthFunc(GL_LESS);
 
         glEnable(GL_BLEND);
         glBlendFunc(GL_SRC_ALPHA, GL_ONE_MINUS_SRC_ALPHA);
@@ -986,7 +1011,7 @@ int main()
 
                     glm::vec3 indicator_scale(0.2f);
 
-                    glm::mat4 cupcake_model_matrix = glm::mat4(0.6f);
+                    glm::mat4 cupcake_model_matrix = glm::mat4(1.0f);
                     cupcake_model_matrix = glm::translate(cupcake_model_matrix, indicator_pos);
                     cupcake_model_matrix = glm::rotate(cupcake_model_matrix, glm::radians(-90.0f), glm::vec3(1.0f, 0.0f, 0.0f));
                     cupcake_model_matrix = glm::scale(cupcake_model_matrix, indicator_scale);
@@ -1048,7 +1073,7 @@ int main()
 
                 ImGui::Text("Penize: $%d", cupcagame->get_game_state().money);
                 ImGui::Separator();
-                ImGui::Text("Stesti: %d%%", cupcagame->get_game_state().happiness);
+                ImGui::Text("Spokojenost: %d%%", cupcagame->get_game_state().happiness);
                 float happiness_fraction = static_cast<float>(cupcagame->get_game_state().happiness) / 100.0f;
                 ImGui::ProgressBar(happiness_fraction, ImVec2(-1.0f, 0.0f), "");
 
@@ -1066,29 +1091,68 @@ int main()
                 float window_width = ImGui::GetWindowSize().x;
                 float window_height = ImGui::GetWindowSize().y;
 
-                ImVec2 title_size = ImGui::CalcTextSize("GAME OVER");
+                bool is_game_over = cupcagame->is_game_over();
+                const char *title_text = is_game_over ? "GAME OVER" : "PAUZA";
+
+                ImVec2 title_size = ImGui::CalcTextSize(title_text);
                 ImGui::SetCursorPos(ImVec2((window_width - title_size.x) * 0.5f, window_height * 0.3f));
 
-                ImGui::PushStyleColor(ImGuiCol_Text, ImVec4(1.0f, 0.2f, 0.2f, 1.0f));
-                ImGui::Text("GAME OVER");
+                ImVec4 title_color = is_game_over ? ImVec4(1.0f, 0.2f, 0.2f, 1.0f) : ImVec4(1.0f, 1.0f, 0.2f, 1.0f);
+                ImGui::PushStyleColor(ImGuiCol_Text, title_color);
+                ImGui::Text("%s", title_text);
                 ImGui::PopStyleColor();
 
-                ImGui::SetCursorPos(ImVec2((window_width - 350) * 0.5f, window_height * 0.45f));
-                ImGui::BeginChild("Statistiky hry", ImVec2(350.0f, 180.0f), true);
-                ImGui::Text("Finalni statistiky:");
-                ImGui::Separator();
+                float content_start_y = window_height * 0.45f;
+                ImGui::SetCursorPos(ImVec2((window_width - 350) * 0.5f, content_start_y));
+
+                ImDrawList *draw_list = ImGui::GetWindowDrawList();
+                ImVec2 content_pos = ImGui::GetCursorScreenPos();
+                ImVec2 content_size(350.0f, 200.0f);
+
+                ImGui::SetCursorPos(ImVec2((window_width - 330) * 0.5f, content_start_y + 10.0f));
+
+                if (is_game_over)
+                {
+                    ImGui::Text("Finalni statistiky:");
+                    ImGui::Separator();
+
+                    if (cupcagame->get_game_state().money <= 0)
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Dosly ti penize!");
+                        ImGui::Text("Strilel jsi prilis mnoho cupcaku...");
+                    }
+                    if (cupcagame->get_game_state().happiness <= 0)
+                    {
+                        ImGui::TextColored(ImVec4(1.0f, 0.3f, 0.3f, 1.0f), "Doslo ti spokojenost!");
+                        ImGui::Text("Neuspokojil jsi zakazniky...");
+                    }
+                    ImGui::Separator();
+                }
+                else
+                {
+                    ImGui::Text("Hra je pozastavena");
+                    ImGui::Separator();
+                }
+
                 ImGui::Text("Penize: $%d", cupcagame->get_game_state().money);
-                ImGui::Text("Stesti: %d%%", cupcagame->get_game_state().happiness);
+                ImGui::Text("Spokojenost: %d%%", cupcagame->get_game_state().happiness);
                 ImGui::Separator();
                 ImGui::TextColored(ImVec4(0.7f, 0.7f, 1.0f, 1.0f), "Ovladani:");
-                ImGui::Text("F5 - Restart");
+
+                if (is_game_over)
+                {
+                    ImGui::Text("F5 - Restart hry");
+                }
+                else
+                {
+                    ImGui::Text("F5 - Pokracovat");
+                }
                 ImGui::Text("ESC - Konec hry");
-                ImGui::EndChild();
 
                 ImGui::End();
                 ImGui::PopStyleColor();
 
-                std::string title = g_windowTitle + " | GAME OVER";
+                std::string title = g_windowTitle + (is_game_over ? " | GAME OVER" : " | PAUSED");
                 glfwSetWindowTitle(window, title.c_str());
             }
 

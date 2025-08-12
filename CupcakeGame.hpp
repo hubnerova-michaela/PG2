@@ -13,7 +13,8 @@ class AudioEngine;
 class ParticleSystem;
 class PhysicsSystem;
 
-struct House {
+struct House
+{
    int id = -1;
    glm::vec3 position{0.0f};
    std::string modelName;
@@ -24,7 +25,8 @@ struct House {
    float delivery_effect_timer = 0.0f;
 };
 
-struct GameState {
+struct GameState
+{
    bool active = true;
    int money = 100;
    int happiness = 100;
@@ -45,7 +47,7 @@ struct GameState {
    float road_segment_width = 10.0f;
    float house_offset_x = 12.0f;
    float house_spacing = 18.0f;
-   
+
    std::vector<House> houses;
    std::vector<std::unique_ptr<Projectile>> projectiles;
 
@@ -60,24 +62,28 @@ struct GameState {
    std::uniform_real_distribution<float> unirand{0.0f, 1.0f};
 };
 
-class CupcakeGame {
+class CupcakeGame
+{
 public:
    CupcakeGame();
    ~CupcakeGame();
 
    void initialize();
-   glm::vec3 calculate_movement(float delta, Camera* camera, PhysicsSystem* physics_system);
-   void update(float delta, Camera* camera, AudioEngine* audio_engine, ParticleSystem* particle_system, PhysicsSystem* physics_system);
-   void handle_mouse_click(Camera* camera);
-   GameState& get_game_state() { return game_state; }
-   glm::vec3 get_house_extents(const std::string& model_name);
-   float get_indicator_height(const std::string& model_name);
+   glm::vec3 calculate_movement(float delta, Camera *camera, PhysicsSystem *physics_system);
+   void update(float delta, Camera *camera, AudioEngine *audio_engine, ParticleSystem *particle_system, PhysicsSystem *physics_system);
+   void handle_mouse_click(Camera *camera);
+   GameState &get_game_state() { return game_state; }
+   glm::vec3 get_house_extents(const std::string &model_name);
+   float get_indicator_height(const std::string &model_name);
+
+   bool is_game_over() const { return !game_state.active && (game_state.money <= 0 || game_state.happiness <= 0); }
+   void restart_game();
 
 private:
-   void update_movement(float delta, Camera* camera, PhysicsSystem* physics_system);
+   void update_movement(float delta, Camera *camera, PhysicsSystem *physics_system);
    void update_projectiles(float delta);
-   void update_earthquake(float delta, Camera* camera, AudioEngine* audio_engine, ParticleSystem* particle_system = nullptr);
-   void update_houses(Camera* camera, PhysicsSystem* physics_system);
+   void update_earthquake(float delta, Camera *camera, AudioEngine *audio_engine, ParticleSystem *particle_system = nullptr);
+   void update_houses(Camera *camera, PhysicsSystem *physics_system);
 
    GameState game_state;
    std::unique_ptr<HouseGenerator> house_generator;
@@ -89,6 +95,6 @@ private:
 
    unsigned int quake_sound_handle = 0;
    bool quake_sound_playing = false;
-   
-   PhysicsSystem* cached_physics_system;
+
+   PhysicsSystem *cached_physics_system;
 };
